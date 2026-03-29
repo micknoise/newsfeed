@@ -156,11 +156,11 @@ def get_latest_digest() -> sqlite3.Row | None:
 
 
 def get_items_needing_audio(limit: int = 80) -> list[sqlite3.Row]:
-    """Items that have a summary but no audio file yet."""
+    """Items that have a summary and a theme but no audio file yet."""
     with _connect() as conn:
         return conn.execute(
             """SELECT * FROM items
-               WHERE summary IS NOT NULL AND audio_done = 0
+               WHERE summary IS NOT NULL AND theme IS NOT NULL AND audio_done = 0
                ORDER BY fetched_at DESC LIMIT ?""",
             (limit,),
         ).fetchall()
