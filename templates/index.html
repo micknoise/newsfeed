@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% set active = "index" %}
+{% block title %}{{ site_title }} — Themes{% endblock %}
+
+{% block content %}
+<!-- Digest section -->
+<section class="digest-section">
+  <div class="digest-header">
+    <h2 class="digest-title">Latest Digest</h2>
+    <div class="digest-controls">
+      {% if audio_exists %}
+      <div class="audio-player">
+        <audio id="digest-audio" src="audio/summary.ogg" preload="none"></audio>
+        <button id="play-digest" class="btn-icon" title="Play digest audio" aria-label="Play digest">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        <span class="audio-label">Listen</span>
+      </div>
+      {% endif %}
+      <button id="tts-digest-btn" class="btn-tts" title="Read digest aloud (browser TTS)" data-target="digest-body">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+        Read aloud
+      </button>
+    </div>
+  </div>
+  <div id="digest-body" class="digest-body">
+    {% if digest.summary %}
+      {% for para in digest.summary.split('\n\n') %}
+        {% if para.strip() %}<p>{{ para.strip() }}</p>{% endif %}
+      {% endfor %}
+    {% else %}
+      <p class="muted">Digest will appear after the first update.</p>
+    {% endif %}
+  </div>
+  {% if digest.created_at %}
+  <p class="digest-time muted">Generated {{ digest.created_at | datefmt }}</p>
+  {% endif %}
+</section>
+
+<!-- Theme sections -->
+{% if themed %}
+<section class="themes-section">
+  <h2 class="section-heading">By Theme</h2>
+
+  <div class="theme-nav">
+    {% for theme in themed.keys() %}
+    <a href="#theme-{{ loop.index }}" class="theme-pill">{{ theme }}</a>
+    {% endfor %}
+    {% if unclassified %}<a href="#theme-unclassified" class="theme-pill theme-pill--muted">Uncategorised</a>{% endif %}
+  </div>
+
+  {% for theme, items in themed.items() %}
+  <div class="theme-group" id="theme-{{ loop.index }}">
+    <h3 class="theme-heading">
+      <span class="theme-badge">{{ theme }}</span>
+      <span class="theme-count">{{ items | length }}</span>
+    </h3>
+    <div class="card-grid">
+      {% for item in items %}
+      <article class="card">
+        <div class="card-meta">
+          <span class="card-source">{{ item.feed_label }}</span>
+          {% if item.published_at %}
+          <span class="card-date">{{ item.published_at | datefmt("%d %b %H:%M") }}</span>
+          {% endif %}
+        </div>
+        <h4 class="card-title">
+          <a href="{{ item.url }}" target="_blank" rel="noopener">{{ item.title }}</a>
+        </h4>
+        {% if item.summary %}
+        <p class="card-summary">{{ item.summary }}</p>
+        {% endif %}
+        {% if item.tags %}
+        <div class="card-tags">
+          {% for tag in item.tags %}<span class="tag">{{ tag }}</span>{% endfor %}
+        </div>
+        {% endif %}
+        <button class="btn-tts btn-tts--small" data-text="{{ item.title }}. {{ item.summary or '' }}" title="Read aloud">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+        </button>
+      </article>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+
+  {% if unclassified %}
+  <div class="theme-group" id="theme-unclassified">
+    <h3 class="theme-heading">
+      <span class="theme-badge theme-badge--muted">Uncategorised</span>
+      <span class="theme-count">{{ unclassified | length }}</span>
+    </h3>
+    <div class="card-grid">
+      {% for item in unclassified %}
+      <article class="card">
+        <div class="card-meta">
+          <span class="card-source">{{ item.feed_label }}</span>
+        </div>
+        <h4 class="card-title">
+          <a href="{{ item.url }}" target="_blank" rel="noopener">{{ item.title }}</a>
+        </h4>
+      </article>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</section>
+{% else %}
+<p class="muted empty-state">No classified items yet — check back after the first update.</p>
+{% endif %}
+
+<!-- TTS status toast -->
+<div id="tts-toast" class="tts-toast" aria-live="polite"></div>
+{% endblock %}

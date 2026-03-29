@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% set active = "feed" %}
+{% block title %}{{ site_title }} — Feed{% endblock %}
+
+{% block content %}
+<section class="feed-section">
+  <div class="feed-header">
+    <h2 class="section-heading">All Recent Items</h2>
+    <span class="feed-count muted">{{ items | length }} items · last {{ items[0].published_at | datefmt if items else '' }}</span>
+  </div>
+
+  {% if items %}
+  <div class="feed-list">
+    {% for item in items %}
+    <article class="feed-item {% if not item.summary %}feed-item--pending{% endif %}">
+      <div class="feed-item-meta">
+        <span class="card-source">{{ item.feed_label }}</span>
+        {% if item.published_at %}
+        <span class="card-date">{{ item.published_at | datefmt("%d %b %H:%M") }}</span>
+        {% endif %}
+        {% if item.theme %}
+        <a href="index.html#theme-{{ loop.index }}" class="theme-pill theme-pill--small">{{ item.theme }}</a>
+        {% endif %}
+      </div>
+      <h3 class="feed-item-title">
+        <a href="{{ item.url }}" target="_blank" rel="noopener">{{ item.title }}</a>
+      </h3>
+      {% if item.summary %}
+      <p class="feed-item-summary">{{ item.summary }}</p>
+      {% endif %}
+      {% if item.tags %}
+      <div class="card-tags">
+        {% for tag in item.tags %}<span class="tag">{{ tag }}</span>{% endfor %}
+      </div>
+      {% endif %}
+      <button class="btn-tts btn-tts--small" data-text="{{ item.title }}. {{ item.summary or '' }}" title="Read aloud">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+      </button>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted empty-state">No items yet — the feed will populate after the first update.</p>
+  {% endif %}
+</section>
+
+<div id="tts-toast" class="tts-toast" aria-live="polite"></div>
+{% endblock %}

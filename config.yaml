@@ -1,0 +1,50 @@
+llm:
+  base_url: "http://localhost:1234/v1"
+  model: "mistralai/devstral-small-2-2512"
+  temperature: 0.3
+  max_tokens_summary: 300
+  max_tokens_digest: 800
+  max_tokens_classify: 60
+
+feeds:
+  - label: "BBC News"
+    url: "https://feeds.bbci.co.uk/news/rss.xml"
+  - label: "The Guardian"
+    url: "https://www.theguardian.com/world/rss"
+  - label: "Reuters"
+    url: "https://feeds.reuters.com/reuters/topNews"
+  - label: "Al Jazeera"
+    url: "https://www.aljazeera.com/xml/rss/all.xml"
+  - label: "The Register"
+    url: "https://www.theregister.com/headlines.atom"
+  - label: "The Register – Security"
+    url: "https://www.theregister.com/security/headlines.atom"
+  - label: "Engadget"
+    url: "https://www.engadget.com/rss.xml"
+  - label: "MacRumours"
+    url: "https://feeds.macrumors.com/MacRumors-All"
+  - label: "Hacker News"
+    url: "https://hnrss.org/frontpage"
+  - label: "IGN"
+    url: "https://feeds.feedburner.com/ign/all"
+  - label: "XKCD"
+    url: "https://xkcd.com/rss.xml"
+  - label: "Reddit – LocalLLaMA"
+    url: "https://www.reddit.com/r/LocalLLaMA/.rss"
+  - label: "Reddit – ComfyUI"
+    url: "https://www.reddit.com/r/comfyui/.rss"
+  - label: "Reddit – ClaudeAI"
+    url: "https://www.reddit.com/r/ClaudeAI/.rss"
+  - label: "Reddit – All"
+    url: "https://www.reddit.com/r/all/.rss"
+  - label: "UK Politics"
+    url: "https://www.reddit.com/r/ukpolitics/.rss"
+
+settings:
+  retention_days: 3
+  items_per_feed: 12
+  max_article_chars: 6000
+  site_title: "Newsfeed"
+  tts_voice: "af_sky"
+  audio_speed: 1.0
+  timezone: "Europe/London"

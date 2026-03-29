@@ -1,0 +1,9 @@
+.env
+data/
+logs/
+__pycache__/
+*.py[cod]
+.DS_Store
+*.egg-info/
+.venv/
+/docs/audio/summary.ogg
