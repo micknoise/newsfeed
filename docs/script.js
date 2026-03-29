@@ -24,6 +24,8 @@ function showToast(msg, duration = 2500) {
 
 function stopAll() {
   if (activeAudio) {
+    activeAudio.onended = null;
+    activeAudio.onerror = null;
     activeAudio.pause();
     activeAudio.src = "";
     activeAudio = null;
@@ -51,8 +53,8 @@ function playAudio(src, btn) {
     activeBtn   = btn;
   });
 
-  audio.addEventListener("ended",  stopAll);
-  audio.addEventListener("error",  () => showToast("Audio not ready yet — try after the next update"));
+  audio.onended = stopAll;
+  audio.onerror = () => showToast("Audio not ready yet — try after the next update");
 
   audio.load();
 }
