@@ -1,6 +1,8 @@
 """
 Generate per-article OGG audio files using the local kokoro CLI.
 Audio is stored at docs/audio/items/<item_id>.ogg and served statically.
+After each run, all current item OGGs are concatenated into
+docs/audio/latest.ogg for a single downloadable listen.
 Old audio files for expired items are deleted to keep the repo lean.
 """
 
@@ -59,6 +61,57 @@ def generate_item_audio(item_id: int, text: str, voice: str, speed: float) -> bo
         return False
 
 
+def build_latest_concat() -> bool:
+    """Concatenate all current item OGGs (ordered by published_at desc) into
+    docs/audio/latest.ogg for download. Returns True on success."""
+    if not AUDIO_DIR.exists():
+        return False
+
+    # Get all items that have audio, ordered newest-first
+    with db._connect() as conn:
+        rows = conn.execute(
+            """SELECT id FROM items
+               WHERE audio_done = 1
+               ORDER BY COALESCE(published_at, fetched_at) DESC"""
+        ).fetchall()
+
+    ogg_files = []
+    for row in rows:
+        p = AUDIO_DIR / f"{row[0]}.ogg"
+        if p.exists():
+            ogg_files.append(p)
+
+    if not ogg_files:
+        return False
+
+    latest_path = ROOT / "docs" / "audio" / "latest.ogg"
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".txt", delete=False, prefix="nf_concat_"
+        ) as f:
+            for p in ogg_files:
+                f.write(f"file '{p.resolve()}'\n")
+            list_path = f.name
+
+        r = subprocess.run(
+            [FFMPEG, "-y", "-f", "concat", "-safe", "0",
+             "-i", list_path, "-c", "copy", str(latest_path)],
+            capture_output=True, timeout=120,
+        )
+        Path(list_path).unlink(missing_ok=True)
+
+        if r.returncode != 0:
+            print(f"[audio] concat failed: {r.stderr.decode()[:200]}")
+            return False
+
+        print(f"[audio] latest.ogg built from {len(ogg_files)} files")
+        return True
+    except Exception as e:
+        print(f"[audio] concat error: {e}")
+        return False
+
+
 def cleanup_orphaned_audio() -> int:
     """Delete OGG files for items no longer in the DB."""
     if not AUDIO_DIR.exists():
@@ -110,6 +163,8 @@ def run() -> int:
     removed = cleanup_orphaned_audio()
     if removed:
         print(f"[audio] Cleaned up {removed} expired audio files")
+
+    build_latest_concat()
 
     return generated
 

@@ -16,6 +16,12 @@
       </nav>
       <div class="header-meta">
         <span class="updated-at">Updated {{ now | datefmt("%d %b %H:%M") }}</span>
+        {% if latest_audio_exists %}
+        <a href="audio/latest.ogg" download="newsfeed-latest.ogg" class="download-link" title="Download all audio from this update">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M5 20h14v-2H5v2zm7-18L5.33 9h3.84v4h5.66V9h3.84L12 2z" transform="scale(1,-1) translate(0,-24)"/><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+          Download latest
+        </a>
+        {% endif %}
       </div>
     </div>
   </header>

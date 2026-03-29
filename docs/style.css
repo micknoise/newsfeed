@@ -68,7 +68,22 @@ a:hover { text-decoration: underline; }
 .site-nav a:hover       { color: var(--text); }
 .site-nav a.active      { color: var(--text); border-bottom-color: var(--text); }
 
-.updated-at { margin-left: auto; font-size: .8rem; color: var(--muted); }
+.updated-at { font-size: .8rem; color: var(--muted); }
+
+.header-meta { margin-left: auto; display: flex; align-items: center; gap: .75rem; }
+
+.download-link {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  font-size: .8rem;
+  color: var(--muted);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: .2rem .5rem;
+}
+.download-link:hover { color: var(--text); border-color: var(--text); text-decoration: none; }
 
 /* ── Layout ───────────────────────────────────────────────────────────────── */
 .site-main {

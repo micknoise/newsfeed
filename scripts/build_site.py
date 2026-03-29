@@ -73,12 +73,15 @@ def run() -> None:
     # --- feed.html — chronological raw feed ---
     all_items = [_row_to_dict(r) for r in db.get_all_recent_items(days=retention)]
     feed_tmpl = env.get_template("feed.html")
+    latest_audio_exists = (DOCS_DIR / "audio" / "latest.ogg").exists()
+
     (DOCS_DIR / "feed.html").write_text(
         feed_tmpl.render(
             site_title=site_title,
             items=all_items,
             now=now,
             digest=digest,
+            latest_audio_exists=latest_audio_exists,
         ),
         encoding="utf-8",
     )
@@ -104,6 +107,7 @@ def run() -> None:
             unclassified=unclassified,
             now=now,
             audio_exists=(DOCS_DIR / "audio" / "summary.ogg").exists(),
+            latest_audio_exists=latest_audio_exists,
         ),
         encoding="utf-8",
     )
