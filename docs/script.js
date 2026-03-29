@@ -1,46 +1,17 @@
 /**
  * Newsfeed — client-side script
  *
- * Two TTS modes:
- *  1. Pre-computed OGG (digest): kokoro af_sky voice, generated server-side each hour.
- *  2. Ad-hoc reading (cards/articles): hits the local Kokoro TTS server on
- *     localhost:8765 for consistent af_sky quality. Falls back to Web Speech API
- *     if the server isn't running (e.g. browsing from another machine).
+ * Audio is pre-computed server-side using kokoro af_sky:
+ *  - docs/audio/summary.ogg        — hourly digest
+ *  - docs/audio/items/<id>.ogg     — per-article summary
+ *
+ * All playback is standard <Audio> — no libraries, no model downloads.
  */
 
-const TTS_SERVER = "http://localhost:8765";
-const TTS_VOICE  = "af_sky";
+// ── Shared player state ────────────────────────────────────────────────────
+let activeAudio = null;
+let activeBtn   = null;
 
-// ── 1. Pre-computed OGG player ─────────────────────────────────────────────
-const digestAudio = document.getElementById("digest-audio");
-const playBtn     = document.getElementById("play-digest");
-
-if (digestAudio && playBtn) {
-  const pauseIcon = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
-  const playIcon  = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
-
-  playBtn.addEventListener("click", () => {
-    if (digestAudio.paused) {
-      digestAudio.play().then(() => {
-        playBtn.innerHTML = pauseIcon;
-        playBtn.classList.add("playing");
-      }).catch(() => {
-        showToast("Audio not available yet — check back after the next update");
-      });
-    } else {
-      digestAudio.pause();
-      playBtn.innerHTML = playIcon;
-      playBtn.classList.remove("playing");
-    }
-  });
-
-  digestAudio.addEventListener("ended", () => {
-    playBtn.innerHTML = playIcon;
-    playBtn.classList.remove("playing");
-  });
-}
-
-// ── Toast ──────────────────────────────────────────────────────────────────
 const toast = document.getElementById("tts-toast");
 
 function showToast(msg, duration = 2500) {
@@ -51,134 +22,93 @@ function showToast(msg, duration = 2500) {
   toast._t = setTimeout(() => toast.classList.remove("show"), duration);
 }
 
-// ── 2. Ad-hoc TTS ─────────────────────────────────────────────────────────
-let serverAvailable = null; // null = unchecked, true/false = result
-let activeAudio = null;
-let activeBtn   = null;
-
-async function checkServer() {
-  if (serverAvailable !== null) return serverAvailable;
-  try {
-    const r = await fetch(`${TTS_SERVER}/ping`, { signal: AbortSignal.timeout(1000) });
-    serverAvailable = r.ok;
-  } catch {
-    serverAvailable = false;
-  }
-  return serverAvailable;
-}
-
-function stopSpeaking() {
+function stopAll() {
   if (activeAudio) {
-    if (activeAudio instanceof Audio) {
-      activeAudio.pause();
-      activeAudio.src = "";
-    } else {
-      // SpeechSynthesisUtterance fallback
-      window.speechSynthesis?.cancel();
-    }
+    activeAudio.pause();
+    activeAudio.src = "";
     activeAudio = null;
   }
   if (activeBtn) {
-    activeBtn.classList.remove("active");
+    activeBtn.classList.remove("playing");
     activeBtn = null;
   }
 }
 
-async function speakWithServer(text, btn) {
-  const url = `${TTS_SERVER}/tts?text=${encodeURIComponent(text)}&voice=${TTS_VOICE}`;
-  showToast("Generating audio…", 15000);
+function playAudio(src, btn) {
+  // Toggle off if same button
+  if (activeBtn === btn) { stopAll(); return; }
+  stopAll();
 
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`TTS server error: ${resp.status}`);
+  const audio = new Audio(src);
 
-  const blob     = await resp.blob();
-  const audioUrl = URL.createObjectURL(blob);
-  const audio    = new Audio(audioUrl);
+  audio.addEventListener("canplaythrough", () => {
+    audio.play().catch(() => showToast("Audio unavailable"));
+  }, { once: true });
 
-  audio.onended = () => {
-    URL.revokeObjectURL(audioUrl);
-    btn.classList.remove("active");
-    if (activeBtn === btn) activeBtn = null;
-  };
-  audio.onerror = () => {
-    URL.revokeObjectURL(audioUrl);
-    btn.classList.remove("active");
-    if (activeBtn === btn) activeBtn = null;
-  };
+  audio.addEventListener("playing", () => {
+    btn.classList.add("playing");
+    activeAudio = audio;
+    activeBtn   = btn;
+  });
 
-  activeAudio = audio;
-  await audio.play();
-  showToast("Speaking…", (audio.duration || 10) * 1000);
+  audio.addEventListener("ended",  stopAll);
+  audio.addEventListener("error",  () => showToast("Audio not ready yet — try after the next update"));
+
+  audio.load();
 }
 
-function speakWithWebSpeech(text, btn) {
-  const synth = window.speechSynthesis;
-  if (!synth) { showToast("Speech not supported"); return; }
+// ── Digest player ──────────────────────────────────────────────────────────
+const digestPlayBtn = document.getElementById("play-digest");
+if (digestPlayBtn) {
+  const pauseIcon = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
+  const playIcon  = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
 
-  const utterance = new SpeechSynthesisUtterance(text.trim());
-  utterance.rate  = 1.05;
-
-  const voices   = synth.getVoices();
-  const preferred = voices.find(v =>
-    v.lang.startsWith("en") && (v.name.includes("Ava") || v.name.includes("Samantha"))
-  ) || voices.find(v => v.lang.startsWith("en-GB") || v.lang.startsWith("en-US"));
-  if (preferred) utterance.voice = preferred;
-
-  utterance.onend = utterance.onerror = () => {
-    btn.classList.remove("active");
-    if (activeBtn === btn) activeBtn = null;
-  };
-
-  activeAudio = utterance;
-  synth.speak(utterance);
-}
-
-async function speakText(text, btn) {
-  const t = text?.trim();
-  if (!t) return;
-
-  if (activeBtn === btn) { stopSpeaking(); return; }
-  stopSpeaking();
-
-  btn.classList.add("active");
-  activeBtn = btn;
-
-  try {
-    const hasServer = await checkServer();
-    if (hasServer) {
-      await speakWithServer(t, btn);
+  digestPlayBtn.addEventListener("click", () => {
+    const wasPlaying = activeBtn === digestPlayBtn;
+    if (wasPlaying) {
+      stopAll();
+      digestPlayBtn.innerHTML = playIcon;
     } else {
-      showToast("TTS server offline — using browser voice");
-      speakWithWebSpeech(t, btn);
+      playAudio("audio/summary.ogg", digestPlayBtn);
+      // Icon updates once audio starts playing
+      const orig = digestPlayBtn.addEventListener.bind(digestPlayBtn);
+      const onPlay = () => { digestPlayBtn.innerHTML = pauseIcon; };
+      const onStop = () => { digestPlayBtn.innerHTML = playIcon; };
+      document.addEventListener("playing",  onPlay,  { once: true });
+      document.addEventListener("ended",    onStop,  { once: true });
     }
-  } catch (err) {
-    console.error("[TTS]", err);
-    // Server call failed mid-flight — retry once with Web Speech
-    serverAvailable = false;
-    showToast("Falling back to browser voice");
-    speakWithWebSpeech(t, btn);
-  }
-}
-
-// ── Wire up .btn-tts buttons ───────────────────────────────────────────────
-function wireButtons() {
-  document.querySelectorAll(".btn-tts").forEach(btn => {
-    btn.addEventListener("click", () => {
-      let text;
-      const targetId = btn.dataset.target;
-      if (targetId) {
-        const el = document.getElementById(targetId);
-        text = el ? el.innerText : "";
-      } else {
-        text = btn.dataset.text || "";
-      }
-      speakText(text, btn);
-    });
   });
 }
 
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", wireButtons);
-} else {
-  wireButtons();
-}
+// ── Per-article play buttons ───────────────────────────────────────────────
+document.querySelectorAll(".btn-play-item").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const src = btn.dataset.audio;
+    if (!src) return;
+
+    // Swap icon
+    const playIcon  = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
+    const pauseIcon = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
+
+    if (activeBtn === btn) {
+      stopAll();
+      btn.innerHTML = playIcon;
+      return;
+    }
+
+    // Reset any previously active item button icon
+    if (activeBtn && activeBtn !== digestPlayBtn) {
+      activeBtn.innerHTML = playIcon;
+    }
+
+    playAudio(src, btn);
+    btn.innerHTML = pauseIcon;
+
+    // Restore icon on end/error
+    const restore = () => { btn.innerHTML = playIcon; };
+    if (activeAudio) {
+      activeAudio.addEventListener("ended", restore, { once: true });
+      activeAudio.addEventListener("error", restore, { once: true });
+    }
+  });
+});

@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS items (
     content     TEXT,
     summary     TEXT,
     theme       TEXT,
-    tags        TEXT    -- JSON array
+    tags        TEXT,   -- JSON array
+    audio_done  INTEGER DEFAULT 0  -- 1 once OGG generated
 );
 
 CREATE INDEX IF NOT EXISTS idx_items_published ON items(published_at DESC);
@@ -152,6 +153,22 @@ def get_latest_digest() -> sqlite3.Row | None:
         return conn.execute(
             "SELECT * FROM digests ORDER BY created_at DESC LIMIT 1"
         ).fetchone()
+
+
+def get_items_needing_audio(limit: int = 80) -> list[sqlite3.Row]:
+    """Items that have a summary but no audio file yet."""
+    with _connect() as conn:
+        return conn.execute(
+            """SELECT * FROM items
+               WHERE summary IS NOT NULL AND audio_done = 0
+               ORDER BY fetched_at DESC LIMIT ?""",
+            (limit,),
+        ).fetchall()
+
+
+def mark_audio_done(item_id: int) -> None:
+    with _connect() as conn:
+        conn.execute("UPDATE items SET audio_done = 1 WHERE id = ?", (item_id,))
 
 
 def cleanup_old_items(days: int = 3) -> int:
