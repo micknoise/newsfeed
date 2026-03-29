@@ -1,6 +1,7 @@
 .env
 data/
 logs/
+docs/
 __pycache__/
 *.py[cod]
 .DS_Store
