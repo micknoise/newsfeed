@@ -3,9 +3,13 @@
  *
  * Two TTS modes:
  *  1. Pre-computed OGG (digest): kokoro af_sky voice, generated server-side each hour.
- *  2. Ad-hoc reading (cards/articles): Web Speech API — built-in, zero download,
- *     uses the best available system voice (macOS: neural Ava/Siri, etc.)
+ *  2. Ad-hoc reading (cards/articles): hits the local Kokoro TTS server on
+ *     localhost:8765 for consistent af_sky quality. Falls back to Web Speech API
+ *     if the server isn't running (e.g. browsing from another machine).
  */
+
+const TTS_SERVER = "http://localhost:8765";
+const TTS_VOICE  = "af_sky";
 
 // ── 1. Pre-computed OGG player ─────────────────────────────────────────────
 const digestAudio = document.getElementById("digest-audio");
@@ -36,7 +40,7 @@ if (digestAudio && playBtn) {
   });
 }
 
-// ── 2. Ad-hoc TTS via Web Speech API ──────────────────────────────────────
+// ── Toast ──────────────────────────────────────────────────────────────────
 const toast = document.getElementById("tts-toast");
 
 function showToast(msg, duration = 2500) {
@@ -47,59 +51,117 @@ function showToast(msg, duration = 2500) {
   toast._t = setTimeout(() => toast.classList.remove("show"), duration);
 }
 
-const synth = window.speechSynthesis;
-let activeBtn = null;
+// ── 2. Ad-hoc TTS ─────────────────────────────────────────────────────────
+let serverAvailable = null; // null = unchecked, true/false = result
+let activeAudio = null;
+let activeBtn   = null;
+
+async function checkServer() {
+  if (serverAvailable !== null) return serverAvailable;
+  try {
+    const r = await fetch(`${TTS_SERVER}/ping`, { signal: AbortSignal.timeout(1000) });
+    serverAvailable = r.ok;
+  } catch {
+    serverAvailable = false;
+  }
+  return serverAvailable;
+}
 
 function stopSpeaking() {
-  synth.cancel();
+  if (activeAudio) {
+    if (activeAudio instanceof Audio) {
+      activeAudio.pause();
+      activeAudio.src = "";
+    } else {
+      // SpeechSynthesisUtterance fallback
+      window.speechSynthesis?.cancel();
+    }
+    activeAudio = null;
+  }
   if (activeBtn) {
     activeBtn.classList.remove("active");
     activeBtn = null;
   }
 }
 
-function speakText(text, btn) {
-  if (!text || !text.trim()) return;
+async function speakWithServer(text, btn) {
+  const url = `${TTS_SERVER}/tts?text=${encodeURIComponent(text)}&voice=${TTS_VOICE}`;
+  showToast("Generating audio…", 15000);
 
-  // Toggle off if same button clicked again
-  if (activeBtn === btn) { stopSpeaking(); return; }
-  stopSpeaking();
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`TTS server error: ${resp.status}`);
 
-  if (!synth) { showToast("Speech not supported in this browser"); return; }
+  const blob     = await resp.blob();
+  const audioUrl = URL.createObjectURL(blob);
+  const audio    = new Audio(audioUrl);
+
+  audio.onended = () => {
+    URL.revokeObjectURL(audioUrl);
+    btn.classList.remove("active");
+    if (activeBtn === btn) activeBtn = null;
+  };
+  audio.onerror = () => {
+    URL.revokeObjectURL(audioUrl);
+    btn.classList.remove("active");
+    if (activeBtn === btn) activeBtn = null;
+  };
+
+  activeAudio = audio;
+  await audio.play();
+  showToast("Speaking…", (audio.duration || 10) * 1000);
+}
+
+function speakWithWebSpeech(text, btn) {
+  const synth = window.speechSynthesis;
+  if (!synth) { showToast("Speech not supported"); return; }
 
   const utterance = new SpeechSynthesisUtterance(text.trim());
   utterance.rate  = 1.05;
 
-  // Prefer a high-quality English voice if available (macOS neural voices)
-  const voices = synth.getVoices();
+  const voices   = synth.getVoices();
   const preferred = voices.find(v =>
-    v.lang.startsWith("en") && (v.name.includes("Ava") || v.name.includes("Samantha") || v.name.includes("Karen"))
-  ) || voices.find(v => v.lang.startsWith("en"));
+    v.lang.startsWith("en") && (v.name.includes("Ava") || v.name.includes("Samantha"))
+  ) || voices.find(v => v.lang.startsWith("en-GB") || v.lang.startsWith("en-US"));
   if (preferred) utterance.voice = preferred;
 
-  utterance.onend = () => {
-    btn.classList.remove("active");
-    if (activeBtn === btn) activeBtn = null;
-  };
-  utterance.onerror = () => {
+  utterance.onend = utterance.onerror = () => {
     btn.classList.remove("active");
     if (activeBtn === btn) activeBtn = null;
   };
 
-  activeBtn = btn;
-  btn.classList.add("active");
+  activeAudio = utterance;
   synth.speak(utterance);
 }
 
-// Voices load asynchronously in some browsers
-if (synth && synth.onvoiceschanged !== undefined) {
-  synth.onvoiceschanged = () => {};
+async function speakText(text, btn) {
+  const t = text?.trim();
+  if (!t) return;
+
+  if (activeBtn === btn) { stopSpeaking(); return; }
+  stopSpeaking();
+
+  btn.classList.add("active");
+  activeBtn = btn;
+
+  try {
+    const hasServer = await checkServer();
+    if (hasServer) {
+      await speakWithServer(t, btn);
+    } else {
+      showToast("TTS server offline — using browser voice");
+      speakWithWebSpeech(t, btn);
+    }
+  } catch (err) {
+    console.error("[TTS]", err);
+    // Server call failed mid-flight — retry once with Web Speech
+    serverAvailable = false;
+    showToast("Falling back to browser voice");
+    speakWithWebSpeech(t, btn);
+  }
 }
 
-// ── Wire up all .btn-tts buttons ───────────────────────────────────────────
+// ── Wire up .btn-tts buttons ───────────────────────────────────────────────
 function wireButtons() {
-  if (!synth) return; // silently hide if browser has no speech support
-
   document.querySelectorAll(".btn-tts").forEach(btn => {
     btn.addEventListener("click", () => {
       let text;
