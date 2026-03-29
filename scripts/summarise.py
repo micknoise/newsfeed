@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 
 import yaml
 from src import db, llm
+from src.text import strip_markdown
 
 AUDIO_DIR = ROOT / "docs" / "audio"
 AUDIO_OUT = AUDIO_DIR / "summary.ogg"
@@ -95,7 +96,7 @@ def run() -> str:
     db.save_digest(digest, len(items))
     print("[summarise] Digest saved")
 
-    generate_audio(digest, voice=voice, speed=speed)
+    generate_audio(strip_markdown(digest), voice=voice, speed=speed)
     return digest
 
 

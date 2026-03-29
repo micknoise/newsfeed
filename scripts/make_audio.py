@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT))
 
 import yaml
 from src import db
+from src.text import strip_markdown
 
 AUDIO_DIR = ROOT / "docs" / "audio" / "items"
 KOKORO    = "/Users/cci-research/miniconda3/bin/kokoro"
@@ -147,7 +148,7 @@ def run() -> int:
 
     generated = 0
     for row in items:
-        text = f"{row['title']}. {row['summary'] or ''}".strip()
+        text = strip_markdown(f"{row['title']}. {row['summary'] or ''}")
         if not text:
             db.mark_audio_done(row["id"])
             continue
