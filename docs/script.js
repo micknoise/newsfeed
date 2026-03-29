@@ -39,7 +39,7 @@ if (digestAudio && playBtn) {
 // ── 2. Browser TTS via @huggingface/transformers ───────────────────────────
 const TRANSFORMERS_CDN =
   "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/dist/transformers.min.js";
-const TTS_MODEL = "onnx-community/Kokoro-82M-v1.0";
+const TTS_MODEL = "onnx-community/Kokoro-82M-ONNX";
 const TTS_VOICE = "af_sky";
 
 let ttsModule   = null;   // the imported transformers module
