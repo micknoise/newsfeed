@@ -3,11 +3,8 @@
  *
  * Two TTS modes:
  *  1. Pre-computed OGG: the #digest-audio <audio> element + #play-digest button
- *  2. Browser TTS: @huggingface/transformers Kokoro model (downloaded on first use,
- *     then cached by the browser). Triggered by any .btn-tts button.
- *
- * The transformers.js model (~80 MB quantised) is loaded lazily — only when the
- * user first clicks a "Read aloud" button.
+ *  2. Browser TTS: kokoro-js via esm.sh (downloads ~80 MB ONNX model on first use,
+ *     cached by the browser). Falls back to Web Speech API if kokoro-js fails.
  */
 
 // ── 1. Pre-computed audio player ──────────────────────────────────────────
@@ -36,17 +33,16 @@ if (digestAudio && playBtn) {
   });
 }
 
-// ── 2. Browser TTS via @huggingface/transformers ───────────────────────────
-const TRANSFORMERS_CDN =
-  "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/dist/transformers.min.js";
-const TTS_MODEL = "onnx-community/Kokoro-82M-ONNX";
-const TTS_VOICE = "af_sky";
+// ── 2. Browser TTS ────────────────────────────────────────────────────────
+const KOKORO_CDN  = "https://esm.sh/kokoro-js@1.2.1";
+const TTS_MODEL   = "onnx-community/Kokoro-82M-ONNX";
+const TTS_VOICE   = "af_sky";
 
-let ttsModule   = null;   // the imported transformers module
-let ttsPipeline = null;   // the loaded TTS pipeline
-let ttsLoading  = false;
-let activeSource = null;  // currently speaking AudioBufferSourceNode
-let activeBtn    = null;  // currently active .btn-tts button
+let kokoroTTS    = null;   // KokoroTTS instance
+let useWebSpeech = false;  // fallback flag
+let ttsLoading   = false;
+let activeSource = null;   // AudioBufferSourceNode or SpeechSynthesisUtterance
+let activeBtn    = null;
 
 const toast = document.getElementById("tts-toast");
 
@@ -59,33 +55,36 @@ function showToast(msg, duration = 3000) {
 }
 
 async function loadTTS() {
-  if (ttsPipeline) return ttsPipeline;
-  if (ttsLoading)  return null;
+  if (kokoroTTS || useWebSpeech) return true;
+  if (ttsLoading) return false;
   ttsLoading = true;
 
-  showToast("Loading speech model… (first use only)", 20000);
+  showToast("Loading speech model… (first use only)", 30000);
   try {
-    ttsModule = await import(TRANSFORMERS_CDN);
-    // Allow remote model downloads and use the browser cache
-    ttsModule.env.allowRemoteModels = true;
-    ttsModule.env.useBrowserCache   = true;
-
-    ttsPipeline = await ttsModule.pipeline("text-to-speech", TTS_MODEL, {
+    const { KokoroTTS } = await import(KOKORO_CDN);
+    kokoroTTS = await KokoroTTS.from_pretrained(TTS_MODEL, {
       dtype: { model: "q8", embeddings: "fp32" },
     });
     showToast("Speech model ready");
-    return ttsPipeline;
+    return true;
   } catch (err) {
-    console.error("[TTS] Failed to load model:", err);
-    showToast("Speech model failed to load — check console");
-    return null;
+    console.warn("[TTS] kokoro-js unavailable, falling back to Web Speech API:", err);
+    if ("speechSynthesis" in window) {
+      useWebSpeech = true;
+      showToast("Using browser voice (kokoro unavailable)");
+      return true;
+    }
+    showToast("TTS unavailable");
+    return false;
   } finally {
     ttsLoading = false;
   }
 }
 
 function stopSpeaking() {
-  if (activeSource) {
+  if (useWebSpeech) {
+    window.speechSynthesis.cancel();
+  } else if (activeSource) {
     try { activeSource.stop(); } catch (_) {}
     activeSource = null;
   }
@@ -95,42 +94,59 @@ function stopSpeaking() {
   }
 }
 
+async function speakWithKokoro(text, btn) {
+  const result = await kokoroTTS.generate(text.trim(), { voice: TTS_VOICE });
+  // result is a RawAudio-like object: { audio: Float32Array, sampling_rate: number }
+  const audio         = result.audio;
+  const sampling_rate = result.sampling_rate;
+
+  const ctx    = new (window.AudioContext || window.webkitAudioContext)();
+  const buffer = ctx.createBuffer(1, audio.length, sampling_rate);
+  buffer.getChannelData(0).set(audio);
+
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(ctx.destination);
+  source.onended = () => {
+    btn.classList.remove("active");
+    if (activeBtn === btn) activeBtn = null;
+  };
+  source.start();
+  activeSource = source;
+  showToast("Speaking…", (audio.length / sampling_rate) * 1000 + 500);
+}
+
+function speakWithWebSpeech(text, btn) {
+  const utterance = new SpeechSynthesisUtterance(text.trim());
+  utterance.rate  = 1.0;
+  utterance.onend = () => {
+    btn.classList.remove("active");
+    if (activeBtn === btn) activeBtn = null;
+  };
+  window.speechSynthesis.speak(utterance);
+  activeSource = utterance;
+  showToast("Speaking…", 30000);
+}
+
 async function speakText(text, btn) {
   if (!text || !text.trim()) return;
 
-  // If same button clicked again → stop
-  if (activeBtn === btn) {
-    stopSpeaking();
-    return;
-  }
+  if (activeBtn === btn) { stopSpeaking(); return; }
   stopSpeaking();
 
-  const synth = await loadTTS();
-  if (!synth) return;
+  const ready = await loadTTS();
+  if (!ready) return;
 
   btn.classList.add("active");
   activeBtn = btn;
-  showToast("Generating audio…", 30000);
 
   try {
-    const output = await synth(text.trim(), { voice: TTS_VOICE });
-    // output.audio is Float32Array, output.sampling_rate is a number
-    const { audio, sampling_rate } = output;
-
-    const ctx    = new (window.AudioContext || window.webkitAudioContext)();
-    const buffer = ctx.createBuffer(1, audio.length, sampling_rate);
-    buffer.getChannelData(0).set(audio);
-
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(ctx.destination);
-    source.onended = () => {
-      btn.classList.remove("active");
-      if (activeBtn === btn) activeBtn = null;
-    };
-    source.start();
-    activeSource = source;
-    showToast("Speaking…", audio.length / sampling_rate * 1000 + 500);
+    if (useWebSpeech) {
+      speakWithWebSpeech(text, btn);
+    } else {
+      showToast("Generating audio…", 30000);
+      await speakWithKokoro(text, btn);
+    }
   } catch (err) {
     console.error("[TTS] Synthesis error:", err);
     showToast("TTS error — see console");
@@ -156,7 +172,6 @@ function wireButtons() {
   });
 }
 
-// Run after DOM is ready
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", wireButtons);
 } else {
