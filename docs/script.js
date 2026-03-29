@@ -17,9 +17,12 @@ if (digestAudio && playBtn) {
 
   playBtn.addEventListener("click", () => {
     if (digestAudio.paused) {
-      digestAudio.play();
-      playBtn.innerHTML = pauseIcon;
-      playBtn.classList.add("playing");
+      digestAudio.play().then(() => {
+        playBtn.innerHTML = pauseIcon;
+        playBtn.classList.add("playing");
+      }).catch(() => {
+        showToast("Audio not available yet — check back after the next update");
+      });
     } else {
       digestAudio.pause();
       playBtn.innerHTML = playIcon;

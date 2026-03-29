@@ -6,4 +6,3 @@ __pycache__/
 .DS_Store
 *.egg-info/
 .venv/
-/docs/audio/summary.ogg
