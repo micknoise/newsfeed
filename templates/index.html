@@ -23,11 +23,9 @@
       </button>
     </div>
   </div>
-  <div id="digest-body" class="digest-body">
-    {% if digest.summary %}
-      {% for para in digest.summary.split('\n\n') %}
-        {% if para.strip() %}<p>{{ para.strip() }}</p>{% endif %}
-      {% endfor %}
+  <div id="digest-body" class="digest-body prose">
+    {% if digest.summary_html %}
+      {{ digest.summary_html | safe }}
     {% else %}
       <p class="muted">Digest will appear after the first update.</p>
     {% endif %}
@@ -67,8 +65,8 @@
         <h4 class="card-title">
           <a href="{{ item.url }}" target="_blank" rel="noopener">{{ item.title }}</a>
         </h4>
-        {% if item.summary %}
-        <p class="card-summary">{{ item.summary }}</p>
+        {% if item.summary_html %}
+        <div class="card-summary prose-sm">{{ item.summary_html | safe }}</div>
         {% endif %}
         {% if item.tags %}
         <div class="card-tags">

@@ -10,9 +10,12 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
+import markdown as md
 import yaml
 from jinja2 import Environment, FileSystemLoader
 from src import db
+
+_md = md.Markdown(extensions=["nl2br", "sane_lists"])
 
 TEMPLATES_DIR = ROOT / "templates"
 DOCS_DIR = ROOT / "docs"
@@ -23,6 +26,14 @@ def _load_config() -> dict:
         return yaml.safe_load(f)
 
 
+def _to_html(text: str) -> str:
+    """Convert markdown text to HTML."""
+    if not text:
+        return ""
+    _md.reset()
+    return _md.convert(text)
+
+
 def _row_to_dict(row) -> dict:
     d = dict(row)
     tags_raw = d.get("tags") or "[]"
@@ -30,7 +41,6 @@ def _row_to_dict(row) -> dict:
         d["tags"] = json.loads(tags_raw) if isinstance(tags_raw, str) else tags_raw
     except Exception:
         d["tags"] = []
-    # Normalise published_at to a readable string
     pub = d.get("published_at")
     if isinstance(pub, str) and pub:
         try:
@@ -38,6 +48,8 @@ def _row_to_dict(row) -> dict:
         except Exception:
             pub = None
     d["published_at"] = pub
+    # Convert markdown fields to HTML
+    d["summary_html"] = _to_html(d.get("summary") or "")
     return d
 
 
@@ -56,6 +68,7 @@ def run() -> None:
     now = datetime.now(timezone.utc)
     digest_row = db.get_latest_digest()
     digest = dict(digest_row) if digest_row else {"summary": "", "created_at": None}
+    digest["summary_html"] = _to_html(digest.get("summary") or "")
 
     # --- feed.html — chronological raw feed ---
     all_items = [_row_to_dict(r) for r in db.get_all_recent_items(days=retention)]
