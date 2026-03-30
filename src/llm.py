@@ -17,7 +17,7 @@ def _cfg() -> dict:
 def _client() -> OpenAI:
     cfg = _cfg()
     base_url = os.environ.get("LLM_BASE_URL", cfg["base_url"])
-    return OpenAI(base_url=base_url, api_key="lm-studio")
+    return OpenAI(base_url=base_url, api_key="lm-studio", timeout=120)
 
 
 def complete(
