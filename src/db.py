@@ -64,11 +64,12 @@ def add_item(guid: str, feed_label: str, title: str, url: str,
         return False
 
 
-def get_unsummarized(limit: int = 50) -> list[sqlite3.Row]:
+def get_unsummarized(limit: int = 50, hours: int = 6) -> list[sqlite3.Row]:
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
     with _connect() as conn:
         return conn.execute(
-            "SELECT * FROM items WHERE summary IS NULL ORDER BY fetched_at DESC LIMIT ?",
-            (limit,),
+            "SELECT * FROM items WHERE summary IS NULL AND fetched_at >= ? ORDER BY fetched_at DESC LIMIT ?",
+            (cutoff, limit),
         ).fetchall()
 
 
@@ -137,6 +138,19 @@ def get_items_by_theme(theme: str, days: int = 3) -> list[sqlite3.Row]:
                WHERE theme = ? AND fetched_at >= ?
                ORDER BY published_at DESC""",
             (theme, cutoff),
+        ).fetchall()
+
+
+def get_items_since(since: datetime, days: int = 3) -> list[sqlite3.Row]:
+    """Items with summaries fetched since `since`, bounded by the retention window."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    lower = max(since, cutoff)
+    with _connect() as conn:
+        return conn.execute(
+            """SELECT * FROM items
+               WHERE fetched_at >= ? AND summary IS NOT NULL
+               ORDER BY published_at DESC""",
+            (lower,),
         ).fetchall()
 
 

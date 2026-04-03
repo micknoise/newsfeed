@@ -63,7 +63,12 @@ def run() -> int:
 
     print(f"[fetch] {len(items)} total items, {new_count} new")
 
-    # 2. Summarize new (unsummarized) items
+    # 2. Remove items older than retention window
+    removed = db.cleanup_old_items(days=config["settings"]["retention_days"])
+    if removed:
+        print(f"[fetch] Removed {removed} expired items")
+
+    # 3. Summarize new (unsummarized) items
     max_chars = config.get("settings", {}).get("max_article_chars", 6000)
     to_summarize = db.get_unsummarized(limit=60)
     print(f"[fetch] Summarizing {len(to_summarize)} items...")
@@ -72,11 +77,6 @@ def run() -> int:
         content, summary = _summarize_item(row, max_chars)
         db.update_summary(row["id"], content, summary)
         print(f"[fetch]   ✓ {row['title'][:60]}")
-
-    # 3. Remove items older than retention window
-    removed = db.cleanup_old_items(days=config["settings"]["retention_days"])
-    if removed:
-        print(f"[fetch] Removed {removed} expired items")
 
     return new_count
 

@@ -12,6 +12,8 @@ ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 import yaml
+from datetime import datetime, timedelta, timezone
+
 from src import db, llm
 from src.text import strip_markdown
 
@@ -89,8 +91,13 @@ def run() -> str:
     voice = config["settings"].get("tts_voice", "af_sky")
     speed = config["settings"].get("audio_speed", 1.0)
 
-    items = db.get_recent_items(days=retention)
-    print(f"[summarise] Building digest from {len(items)} recent items...")
+    last = db.get_latest_digest()
+    if last:
+        since = datetime.fromisoformat(str(last["created_at"])).replace(tzinfo=timezone.utc)
+    else:
+        since = datetime.now(timezone.utc) - timedelta(hours=1)
+    items = db.get_items_since(since, days=retention)
+    print(f"[summarise] Building digest from {len(items)} new items (since {since.strftime('%Y-%m-%d %H:%M UTC')})...")
 
     digest = generate_digest(items, max_tokens)
     db.save_digest(digest, len(items))
