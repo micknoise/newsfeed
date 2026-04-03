@@ -62,18 +62,23 @@ def generate_item_audio(item_id: int, text: str, voice: str, speed: float) -> bo
         return False
 
 
-def build_latest_concat() -> bool:
-    """Concatenate all current item OGGs (ordered by published_at desc) into
+def build_latest_concat(hours: int = 24) -> bool:
+    """Concatenate the last `hours` worth of item OGGs (ordered by published_at desc) into
     docs/audio/latest.ogg for download. Returns True on success."""
     if not AUDIO_DIR.exists():
         return False
 
-    # Get all items that have audio, ordered newest-first
+    from datetime import datetime, timezone, timedelta
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+
+    # Get items from the last `hours`, ordered newest-first
     with db._connect() as conn:
         rows = conn.execute(
             """SELECT id FROM items
                WHERE audio_done = 1
-               ORDER BY COALESCE(published_at, fetched_at) DESC"""
+                 AND COALESCE(published_at, fetched_at) >= ?
+               ORDER BY COALESCE(published_at, fetched_at) DESC""",
+            (cutoff.isoformat(),),
         ).fetchall()
 
     ogg_files = []
