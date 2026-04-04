@@ -1,8 +1,8 @@
 """
 Generate per-article OGG audio files using the local kokoro CLI.
 Audio is stored at docs/audio/items/<item_id>.ogg and served statically.
-After each run, all current item OGGs are concatenated into
-docs/audio/latest.ogg for a single downloadable listen.
+After each run, recent item OGGs are concatenated into
+docs/audio/latest.ogg (capped at 1 hour of playback) for a single downloadable listen.
 Old audio files for expired items are deleted to keep the repo lean.
 """
 
@@ -63,8 +63,8 @@ def generate_item_audio(item_id: int, text: str, voice: str, speed: float) -> bo
 
 
 def build_latest_concat(hours: int = 24) -> bool:
-    """Concatenate the last `hours` worth of item OGGs (ordered by published_at desc) into
-    docs/audio/latest.ogg for download. Returns True on success."""
+    """Concatenate recent item OGGs into docs/audio/latest.ogg, capped at 1 hour
+    of playback duration. Returns True on success."""
     if not AUDIO_DIR.exists():
         return False
 
@@ -78,7 +78,7 @@ def build_latest_concat(hours: int = 24) -> bool:
                WHERE audio_done = 1
                  AND COALESCE(published_at, fetched_at) >= ?
                ORDER BY COALESCE(published_at, fetched_at) DESC""",
-            (cutoff.isoformat(),),
+            (cutoff.strftime("%Y-%m-%d %H:%M:%S"),),
         ).fetchall()
 
     ogg_files = []
@@ -102,7 +102,7 @@ def build_latest_concat(hours: int = 24) -> bool:
 
         r = subprocess.run(
             [FFMPEG, "-y", "-f", "concat", "-safe", "0",
-             "-i", list_path, "-c", "copy", str(latest_path)],
+             "-i", list_path, "-t", "3600", "-c", "copy", str(latest_path)],
             capture_output=True, timeout=120,
         )
         Path(list_path).unlink(missing_ok=True)
