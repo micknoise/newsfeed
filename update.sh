@@ -6,9 +6,9 @@ set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOGFILE="$DIR/logs/update.log"
-PYTHON="/Users/cci-research/miniconda3/bin/python3"
+PYTHON="$DIR/.venv/bin/python3"
 
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/Users/cci-research/miniconda3/bin:$PATH"
+export PATH="$DIR/.venv/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 cd "$DIR"
 

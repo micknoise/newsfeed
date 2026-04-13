@@ -7,3 +7,9 @@ jinja2>=3.1
 python-dotenv>=1.0
 pyyaml>=6.0
 markdown>=3.4
+
+# TTS (kokoro CLI + ML deps)
+kokoro==0.9.4
+# Pinned <2.0 — kokoro is compiled against NumPy 1.x; upgrading NumPy to 2.x breaks TTS
+numpy>=1.24,<2.0
+scipy>=1.14
