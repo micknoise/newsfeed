@@ -23,7 +23,7 @@ echo "────────────────────────�
 echo "$(date '+%Y-%m-%d %H:%M:%S') Starting update" >> "$LOGFILE"
 
 # Run pipeline (generates docs/ locally)
-PYTHONUNBUFFERED=1 "$PYTHON" scripts/run_all.py 2>&1 | tee -a "$LOGFILE"
+PYTHONUNBUFFERED=1 "$PYTHON" scripts/run_all.py 2>&1 | tee -a "$LOGFILE" || echo "$(date '+%Y-%m-%d %H:%M:%S') Pipeline exited non-zero, continuing to push existing docs/" >> "$LOGFILE"
 
 # Force-push docs/ as an orphan commit to gh-pages (no history accumulation)
 REPO_URL=$(git remote get-url origin)
