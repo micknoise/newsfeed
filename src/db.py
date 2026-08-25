@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS items (
     summary     TEXT,
     theme       TEXT,
     tags        TEXT,   -- JSON array
+    summary_source TEXT,   -- how the summary was derived: verified|llm|extractive|none
     audio_done  INTEGER DEFAULT 0  -- 1 once OGG generated
 );
 
@@ -47,6 +48,10 @@ def _connect() -> sqlite3.Connection:
 def init_db() -> None:
     with _connect() as conn:
         conn.executescript(_SCHEMA)
+        # Migrate older DBs that predate the summary_source column.
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(items)")}
+        if "summary_source" not in cols:
+            conn.execute("ALTER TABLE items ADD COLUMN summary_source TEXT")
 
 
 def add_item(guid: str, feed_label: str, title: str, url: str,
@@ -64,7 +69,14 @@ def add_item(guid: str, feed_label: str, title: str, url: str,
         return False
 
 
-def get_unsummarized(limit: int = 50, hours: int = 6) -> list[sqlite3.Row]:
+def get_unsummarized(limit: int = 50, hours: int = 72) -> list[sqlite3.Row]:
+    """Items still awaiting a summary, newest first.
+
+    The window must be at least as long as the retention period. A run fetches
+    more items than `limit`, so leftovers have to stay eligible for the *next*
+    run — with a window shorter than the cron interval they would age out
+    unsummarised, and (because classify.py requires a summary) unclassified too.
+    """
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
     with _connect() as conn:
         return conn.execute(
@@ -81,11 +93,21 @@ def get_unclassified(limit: int = 50) -> list[sqlite3.Row]:
         ).fetchall()
 
 
-def update_summary(item_id: int, content: str, summary: str) -> None:
+def update_summary(item_id: int, content: str, summary: str,
+                   source: str = "llm") -> None:
+    """Store the article text and its summary.
+
+    `source` records how the summary was derived so the site can distinguish a
+    grounded summary from a bare fallback:
+      verified   — LLM summary that passed the groundedness check
+      llm        — LLM summary (check disabled)
+      extractive — copied from the source text, no LLM claims
+      none       — no usable source text; title only
+    """
     with _connect() as conn:
         conn.execute(
-            "UPDATE items SET content = ?, summary = ? WHERE id = ?",
-            (content, summary, item_id),
+            "UPDATE items SET content = ?, summary = ?, summary_source = ? WHERE id = ?",
+            (content, summary, source, item_id),
         )
 
 

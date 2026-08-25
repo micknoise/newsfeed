@@ -1,10 +1,17 @@
 llm:
   base_url: "http://localhost:1234/v1"
+  # Devstral is a coding model — it is not tuned for prose summarisation.
+  # Recommended swap once downloaded in LM Studio (MLX build, ~20 GB on disk):
+  #   model: "qwen/qwen3.6-35b-a3b"
   model: "mistralai/devstral-small-2-2512"
   temperature: 0.3
   max_tokens_summary: 300
   max_tokens_digest: 800
   max_tokens_classify: 60
+  # Re-check every generated summary against the article text and throw it
+  # away if it asserts anything the source doesn't support. Doubles the number
+  # of LLM calls but stops invented news reaching the site.
+  verify_summaries: true
 
 feeds:
   - label: "BBC News"
@@ -42,6 +49,11 @@ feeds:
 
 settings:
   retention_days: 3
+  # Minimum characters of real article text required before we ask the LLM for
+  # a summary at all. Below this we quote the source instead of generating.
+  min_source_chars: 400
+  # Pre-rendered OGG narration (kokoro + ffmpeg). Slow, rarely used — off.
+  audio_enabled: false
   items_per_feed: 12
   max_article_chars: 6000
   site_title: "Newsfeed"

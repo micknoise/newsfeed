@@ -17,6 +17,9 @@ from src import db
 
 _md = md.Markdown(extensions=["nl2br", "sane_lists"])
 
+# Set from config in run(); gates the per-item audio buttons in templates.
+_AUDIO_ENABLED = False
+
 TEMPLATES_DIR = ROOT / "templates"
 DOCS_DIR = ROOT / "docs"
 
@@ -50,6 +53,8 @@ def _row_to_dict(row) -> dict:
     d["published_at"] = pub
     # Convert markdown fields to HTML
     d["summary_html"] = _to_html(d.get("summary") or "")
+    if not _AUDIO_ENABLED:
+        d["audio_done"] = 0
     return d
 
 
@@ -59,6 +64,9 @@ def run() -> None:
 
     retention = config["settings"]["retention_days"]
     site_title = config["settings"].get("site_title", "Newsfeed")
+    audio_enabled = config["settings"].get("audio_enabled", False)
+    global _AUDIO_ENABLED
+    _AUDIO_ENABLED = audio_enabled
 
     env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=True)
     env.filters["datefmt"] = lambda dt, fmt="%d %b %Y %H:%M": (
@@ -73,7 +81,7 @@ def run() -> None:
     # --- feed.html — chronological raw feed ---
     all_items = [_row_to_dict(r) for r in db.get_all_recent_items(days=retention)]
     feed_tmpl = env.get_template("feed.html")
-    latest_audio_exists = (DOCS_DIR / "audio" / "latest.ogg").exists()
+    latest_audio_exists = audio_enabled and (DOCS_DIR / "audio" / "latest.ogg").exists()
 
     (DOCS_DIR / "feed.html").write_text(
         feed_tmpl.render(
@@ -106,7 +114,7 @@ def run() -> None:
             themed=themed,
             unclassified=unclassified,
             now=now,
-            audio_exists=(DOCS_DIR / "audio" / "summary.ogg").exists(),
+            audio_exists=audio_enabled and (DOCS_DIR / "audio" / "summary.ogg").exists(),
             latest_audio_exists=latest_audio_exists,
         ),
         encoding="utf-8",

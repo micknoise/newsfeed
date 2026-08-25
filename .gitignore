@@ -7,3 +7,6 @@ __pycache__/
 .DS_Store
 *.egg-info/
 .venv/
+
+# Claude Code local settings and memory — not for the public repo
+.claude/

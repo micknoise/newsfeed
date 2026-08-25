@@ -36,16 +36,23 @@ def main():
     print(f"# Newsfeed update — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"{'#'*50}")
 
+    import yaml
+    with open(ROOT / "config.yaml") as f:
+        audio_enabled = yaml.safe_load(f)["settings"].get("audio_enabled", False)
+
     from scripts.fetch import run as fetch_run
     from scripts.classify import run as classify_run
     from scripts.summarise import run as summarise_run
-    from scripts.make_audio import run as audio_run
     from scripts.build_site import run as build_run
 
     _step("Fetch RSS feeds", fetch_run)
     _step("Classify items", classify_run)
-    _step("Generate digest + audio", summarise_run)
-    _step("Generate per-article audio", audio_run)
+    _step("Generate digest", summarise_run)
+    if audio_enabled:
+        from scripts.make_audio import run as audio_run
+        _step("Generate per-article audio", audio_run)
+    else:
+        print("\n[run_all] Audio generation disabled (settings.audio_enabled: false)")
     _step("Build static site", build_run)
 
     print(f"\n[run_all] Update complete — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")

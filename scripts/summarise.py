@@ -103,7 +103,10 @@ def run() -> str:
     db.save_digest(digest, len(items))
     print("[summarise] Digest saved")
 
-    generate_audio(strip_markdown(digest), voice=voice, speed=speed)
+    if config["settings"].get("audio_enabled", False):
+        generate_audio(strip_markdown(digest), voice=voice, speed=speed)
+    else:
+        print("[summarise] Audio disabled — skipping OGG render")
     return digest
 
 

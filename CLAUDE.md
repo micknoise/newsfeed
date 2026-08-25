@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this project is
 
-A personal static newsfeed site deployed via GitHub Pages (`micknoise/newsfeed`). A local cron job runs `update.sh` every hour, which: fetches RSS feeds → LLM-summarises articles → LLM-classifies into themes → generates an overall digest → renders static HTML → generates OGG audio → commits and pushes to GitHub.
+A personal static newsfeed site deployed via GitHub Pages (`micknoise/newsfeed`). A local cron job runs `update.sh` four times a day (00/06/12/18), which: fetches RSS feeds → LLM-summarises articles (with a groundedness check) → LLM-classifies into themes → generates an overall digest → renders static HTML → commits and pushes to GitHub.
+
+Audio narration is **disabled** (`settings.audio_enabled: false`) — it was slow to render and rarely used.
 
 ## Commands
 
@@ -35,36 +37,38 @@ src/          Core library (no side effects, importable)
 scripts/      Pipeline steps, each has a run() function
   fetch.py    RSS → DB, then LLM summaries for new items
   classify.py LLM assigns theme + tags to unclassified items
-  summarise.py  Overall digest + kokoro CLI + ffmpeg → docs/audio/summary.ogg
+  summarise.py  Overall digest (audio render skipped unless audio_enabled)
   build_site.py Jinja2 → docs/index.html + docs/feed.html
   run_all.py  Orchestrator: calls each step in order
 
 templates/    Jinja2 — base.html, index.html (themes), feed.html (chronological)
 docs/         GitHub Pages output (committed to repo)
   style.css   Static — responsive CSS with dark mode
-  script.js   Static — pre-computed audio player + @huggingface/transformers browser TTS
+  script.js   Static — audio player + browser TTS (inert while audio is disabled)
 data/         SQLite DB — gitignored, stores last 3 days of items
 ```
 
 ## Key design decisions
 
 - **DB is gitignored** — `data/newsfeed.db` is local only. The site is fully rebuilt from DB on each run.
-- **`docs/audio/summary.ogg` is gitignored** — regenerated each hour and committed separately.
 - **Themes are LLM-discovered** — no fixed categories. `classify.py` passes existing themes as context to encourage consistency.
-- **Two TTS modes** — pre-computed OGG (kokoro CLI + ffmpeg) for the digest, and client-side `@huggingface/transformers` (Kokoro, downloads ~80 MB on first browser use) for ad-hoc reading of any text.
+- **Audio is off by default** — `settings.audio_enabled: false` skips both the digest OGG and the per-item OGGs, and makes `build_site.py` hide every audio control. `scripts/make_audio.py` is retained but not called. Flip the flag to true to bring it all back.
+- **Feeds are rate limited per host** — `src/rss.py` serialises requests per host (`HOST_DELAYS`; Reddit is 90s) and sends a descriptive `User-Agent`. Reddit returns `x-ratelimit-remaining: 0` after a *single* unauthenticated `.rss` request, so back-to-back fetches get 429s. A failed fetch raises `FeedFetchError` and is logged loudly — it is never silently treated as "this feed has no news".
+- **Summaries must be grounded** — `scripts/fetch.py` only calls the LLM when it has at least `settings.min_source_chars` (400) of real article text; otherwise it quotes the source extractively rather than inventing. With `llm.verify_summaries: true` each generated summary is re-checked against the source and discarded if unsupported. Provenance is stored in `items.summary_source` (`verified` / `llm` / `extractive` / `none`).
 - **Fault-tolerant pipeline** — each step in `run_all.py` catches exceptions so a LLM failure doesn't break the site build.
 
 ## Config
 
-`config.yaml` — feeds list, LLM model/URL, retention days, TTS voice.
+`config.yaml` — feeds list, LLM model/URL, retention days, `audio_enabled`,
+`verify_summaries`, `min_source_chars`, TTS voice.
 `.env` — secrets (`WEB_SEARCH_API_KEY`). Copy from `.env.example`.
 
 ## Cron setup
 
 ```bash
 crontab -e
-# Add:
-0 * * * * /Users/cci-research/workspace/newsfeed/update.sh
+# Add (four times a day — Reddit throttling makes a full run take ~8 min):
+0 0,6,12,18 * * * /Users/cci-research/workspace/newsfeed/update.sh
 ```
 
 ## LLM
