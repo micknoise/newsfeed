@@ -80,7 +80,8 @@ def get_unsummarized(limit: int = 50, hours: int = 72) -> list[sqlite3.Row]:
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
     with _connect() as conn:
         return conn.execute(
-            "SELECT * FROM items WHERE summary IS NULL AND fetched_at >= ? ORDER BY fetched_at DESC LIMIT ?",
+            "SELECT * FROM items WHERE summary IS NULL AND fetched_at >= ? "
+            "ORDER BY COALESCE(published_at, fetched_at) DESC LIMIT ?",
             (cutoff, limit),
         ).fetchall()
 

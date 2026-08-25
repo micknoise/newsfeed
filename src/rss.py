@@ -8,7 +8,7 @@ retried with backoff rather than being silently swallowed.
 """
 
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse
 
@@ -137,10 +137,22 @@ def _make_guid(entry, feed_url: str) -> str:
     return getattr(entry, "id", None) or entry.get("link", "") or f"{feed_url}#{entry.get('title','')}"
 
 
-def fetch_feed(label: str, url: str, limit: int = 12) -> list[dict]:
-    """Fetch a single RSS/Atom feed. Raises FeedFetchError on fetch failure."""
+def fetch_feed(label: str, url: str, limit: int = 12,
+               max_age_days: int | None = None) -> list[dict]:
+    """Fetch a single RSS/Atom feed. Raises FeedFetchError on fetch failure.
+
+    If `max_age_days` is set, entries published longer ago than that are
+    dropped. Entries with no parseable date are always kept — some feeds
+    simply omit dates, and dropping those would be worse than keeping them.
+    """
     raw = _get(url)
     parsed = feedparser.parse(raw)
+
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(days=max_age_days)
+        if max_age_days else None
+    )
+    stale = 0
 
     results = []
     for entry in parsed.entries[:limit]:
@@ -149,14 +161,27 @@ def fetch_feed(label: str, url: str, limit: int = 12) -> list[dict]:
             or getattr(entry, "description", "")
             or ""
         )
+        published = _parse_date(entry)
+        if cutoff and published and published < cutoff:
+            stale += 1
+            continue
+
         results.append({
             "guid":        _make_guid(entry, url),
             "feed_label":  label,
             "title":       entry.get("title", "").strip(),
             "url":         entry.get("link", ""),
-            "published_at": _parse_date(entry),
+            "published_at": published,
             "description": _clean_html(summary_raw)[:500],
         })
+
+    if stale:
+        # A feed where *everything* is stale is almost certainly frozen, not quiet.
+        if not results:
+            print(f"[rss] {label}: WARNING — all {stale} entries older than "
+                  f"{max_age_days}d; feed looks frozen")
+        else:
+            print(f"[rss] {label}: dropped {stale} stale entries (>{max_age_days}d)")
     return results
 
 
@@ -166,14 +191,17 @@ def fetch_all(config: dict) -> list[dict]:
     Feeds are ordered so that same-host feeds are spread out, and failures are
     reported loudly rather than silently yielding an empty feed.
     """
-    limit = config.get("settings", {}).get("items_per_feed", 12)
+    settings = config.get("settings", {})
+    limit = settings.get("items_per_feed", 12)
+    max_age = settings.get("max_item_age_days", 14)
     feeds = config.get("feeds", [])
     all_items = []
     failures = []
 
     for feed in feeds:
         try:
-            items = fetch_feed(feed["label"], feed["url"], limit=limit)
+            items = fetch_feed(feed["label"], feed["url"], limit=limit,
+                               max_age_days=max_age)
         except FeedFetchError as e:
             failures.append((feed["label"], str(e)))
             print(f"[rss] {feed['label']}: FAILED — {e}")

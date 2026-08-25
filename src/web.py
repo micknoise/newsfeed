@@ -4,8 +4,30 @@ import requests
 from html.parser import HTMLParser
 
 
+# Interstitials that return plenty of text but no article. Without this they
+# sail past settings.min_source_chars and get summarised as if they were news.
+_INTERSTITIAL_HOSTS = ("news.google.com", "consent.google.com", "consent.yahoo.com")
+_INTERSTITIAL_MARKERS = (
+    "Before you continue to Google",
+    "We use cookies and data",
+    "Enable JavaScript and cookies to continue",
+)
+
+
+def _is_interstitial(url: str, text: str) -> bool:
+    """True if `text` is a consent/redirect page rather than article content."""
+    from urllib.parse import urlparse
+    if urlparse(url).netloc.lower().lstrip("www.") in _INTERSTITIAL_HOSTS:
+        return True
+    head = text[:1500]
+    return any(m in head for m in _INTERSTITIAL_MARKERS)
+
+
 def fetch_article_text(url: str, max_chars: int = 6000) -> str:
-    """Extract plain text from a URL. Returns empty string on failure."""
+    """Extract plain text from a URL. Returns empty string on failure.
+
+    Consent/redirect interstitials are treated as failures, not as content.
+    """
     try:
         import trafilatura
         downloaded = trafilatura.fetch_url(url)
@@ -17,7 +39,10 @@ def fetch_article_text(url: str, max_chars: int = 6000) -> str:
                 no_fallback=False,
             )
             if text and len(text.strip()) > 100:
-                return text.strip()[:max_chars]
+                text = text.strip()
+                if not _is_interstitial(url, text):
+                    return text[:max_chars]
+                return ""
     except Exception:
         pass
 
@@ -46,6 +71,9 @@ def fetch_article_text(url: str, max_chars: int = 6000) -> str:
 
         stripper = _Stripper()
         stripper.feed(resp.text)
-        return " ".join(stripper._parts)[:max_chars]
+        text = " ".join(stripper._parts)
+        if _is_interstitial(url, text):
+            return ""
+        return text[:max_chars]
     except Exception:
         return ""

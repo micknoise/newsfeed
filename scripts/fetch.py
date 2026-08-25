@@ -145,7 +145,8 @@ def run() -> int:
     # Keep the eligibility window tied to retention so nothing fetched but not
     # yet summarised falls off the end before a later run can pick it up.
     to_summarize = db.get_unsummarized(
-        limit=60, hours=config["settings"]["retention_days"] * 24
+        limit=config["settings"].get("max_summaries_per_run", 200),
+        hours=config["settings"]["retention_days"] * 24,
     )
     print(f"[fetch] Summarizing {len(to_summarize)} items...")
 

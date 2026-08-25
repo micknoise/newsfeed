@@ -18,8 +18,6 @@ feeds:
     url: "https://feeds.bbci.co.uk/news/rss.xml"
   - label: "The Guardian"
     url: "https://www.theguardian.com/world/rss"
-  - label: "Reuters"
-    url: "https://feeds.reuters.com/reuters/topNews"
   - label: "Al Jazeera"
     url: "https://www.aljazeera.com/xml/rss/all.xml"
   - label: "The Register"
@@ -55,6 +53,16 @@ settings:
   # Pre-rendered OGG narration (kokoro + ffmpeg). Slow, rarely used — off.
   audio_enabled: false
   items_per_feed: 12
+  # Drop feed entries older than this. Guards against a feed freezing and
+  # serving a stale cache as if it were current (openrss.org/reuters.com
+  # sat ~4 weeks stale while still returning HTTP 200 + valid RSS).
+  # Deliberately NOT retention_days: slow feeds (XKCD, Register Security)
+  # legitimately carry items older than 3 days.
+  max_item_age_days: 14
+  # Max items summarised per run. Steady state is ~60 new items per 6h run,
+  # so this needs headroom to drain a backlog rather than dumping the
+  # remainder into the Uncategorised pile. ~1.25 min/item on the local LLM.
+  max_summaries_per_run: 200
   max_article_chars: 6000
   site_title: "Newsfeed"
   tts_voice: "af_sky"
