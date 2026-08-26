@@ -25,11 +25,20 @@ echo "$(date '+%Y-%m-%d %H:%M:%S') Starting update" >> "$LOGFILE"
 # Run pipeline (generates docs/ locally)
 PYTHONUNBUFFERED=1 "$PYTHON" scripts/run_all.py 2>&1 | tee -a "$LOGFILE" || echo "$(date '+%Y-%m-%d %H:%M:%S') Pipeline exited non-zero, continuing to push existing docs/" >> "$LOGFILE"
 
+# Warn on documentation drift. Never fatal — `set -e` is active and a stale
+# comment must not stop the site from publishing.
+"$PYTHON" scripts/check_docs.py >> "$LOGFILE" 2>&1 || \
+  echo "$(date '+%Y-%m-%d %H:%M:%S') check_docs reported drift (see above)" >> "$LOGFILE"
+
 # Force-push docs/ as an orphan commit to gh-pages (no history accumulation)
 REPO_URL=$(git remote get-url origin)
 TMPDIR=$(mktemp -d)
 
 cp -r "$DIR/docs/." "$TMPDIR/"
+# Finder leaves .DS_Store in docs/; git add -A below would publish it to the
+# public branch every run. Target it by name — do NOT exclude dotfiles wholesale,
+# because docs/.nojekyll must ship (without it Pages runs Jekyll over the site).
+find "$TMPDIR" -name '.DS_Store' -delete
 
 (
   cd "$TMPDIR"

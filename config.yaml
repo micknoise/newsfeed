@@ -52,6 +52,10 @@ settings:
   min_source_chars: 400
   # Pre-rendered OGG narration (kokoro + ffmpeg). Slow, rarely used — off.
   audio_enabled: false
+  # Entries kept per feed per fetch. This is a hard cap: anything beyond it in
+  # a feed's list is dropped and never backfilled, so it must comfortably exceed
+  # what a feed publishes between runs. Fast feeds are the risk — Al Jazeera
+  # runs ~5 items/hour, so 12 covers only ~2.4h of a 6h gap.
   items_per_feed: 12
   # Drop feed entries older than this. Guards against a feed freezing and
   # serving a stale cache as if it were current (openrss.org/reuters.com
@@ -68,6 +72,8 @@ settings:
   # (71 items from 25 Aug sat unclassified through four runs at limit=80).
   # Keep this comfortably above per-run intake (~54-88 items).
   max_classified_per_run: 200
+  # Characters of extracted article text sent to the LLM per summary. Caps
+  # prompt size and cost; the groundedness check reads from the same text.
   max_article_chars: 6000
   site_title: "Newsfeed"
   tts_voice: "af_sky"
