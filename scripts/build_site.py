@@ -80,6 +80,13 @@ def run() -> None:
 
     # --- feed.html — chronological raw feed ---
     all_items = [_row_to_dict(r) for r in db.get_all_recent_items(days=retention)]
+
+    # Colour on the page means exactly one thing: arrived in the latest update.
+    # Everything in the newest fetch batch shares one fetched_at timestamp.
+    latest_fetch = max((i.get("fetched_at") for i in all_items if i.get("fetched_at")),
+                       default=None)
+    for i in all_items:
+        i["is_new"] = bool(latest_fetch) and i.get("fetched_at") == latest_fetch
     feed_tmpl = env.get_template("feed.html")
     latest_audio_exists = audio_enabled and (DOCS_DIR / "audio" / "latest.ogg").exists()
 
@@ -96,14 +103,22 @@ def run() -> None:
 
     # --- index.html — themes + digest ---
     themes = db.get_themes(days=retention)
+
+    def _mark(rows):
+        out = []
+        for r in rows:
+            d = _row_to_dict(r)
+            d["is_new"] = bool(latest_fetch) and d.get("fetched_at") == latest_fetch
+            out.append(d)
+        return out
+
     themed = {
-        theme: [_row_to_dict(r) for r in db.get_items_by_theme(theme, days=retention)]
+        theme: _mark(db.get_items_by_theme(theme, days=retention))
         for theme in themes
     }
     # Items not yet classified go in a catch-all
     unclassified = [
-        _row_to_dict(r) for r in db.get_all_recent_items(days=retention)
-        if not r["theme"]
+        d for d in _mark(db.get_all_recent_items(days=retention)) if not d.get("theme")
     ]
 
     index_tmpl = env.get_template("index.html")

@@ -55,12 +55,13 @@
     </h3>
     <div class="card-grid">
       {% for item in items %}
-      <article class="card">
+      <article class="card{% if item.is_new %} card--new{% endif %}">
         <div class="card-meta">
           <span class="card-source">{{ item.feed_label }}</span>
           {% if item.published_at %}
           <span class="card-date">{{ item.published_at | datefmt("%d %b %H:%M") }}</span>
           {% endif %}
+          {% if item.is_new %}<span class="badge-new">NEW</span>{% endif %}
         </div>
         <h4 class="card-title">
           <a href="{{ item.url }}" target="_blank" rel="noopener">{{ item.title }}</a>
@@ -92,9 +93,10 @@
     </h3>
     <div class="card-grid">
       {% for item in unclassified %}
-      <article class="card">
+      <article class="card{% if item.is_new %} card--new{% endif %}">
         <div class="card-meta">
           <span class="card-source">{{ item.feed_label }}</span>
+          {% if item.is_new %}<span class="badge-new">NEW</span>{% endif %}
         </div>
         <h4 class="card-title">
           <a href="{{ item.url }}" target="_blank" rel="noopener">{{ item.title }}</a>

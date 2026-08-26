@@ -12,7 +12,7 @@
   {% if items %}
   <div class="feed-list">
     {% for item in items %}
-    <article class="feed-item {% if not item.summary %}feed-item--pending{% endif %}">
+    <article class="feed-item{% if item.is_new %} feed-item--new{% endif %}{% if not item.summary %} feed-item--pending{% endif %}">
       <div class="feed-item-meta">
         <span class="card-source">{{ item.feed_label }}</span>
         {% if item.published_at %}
@@ -21,6 +21,7 @@
         {% if item.theme %}
         <a href="index.html#theme-{{ loop.index }}" class="theme-pill theme-pill--small">{{ item.theme }}</a>
         {% endif %}
+        {% if item.is_new %}<span class="badge-new">NEW</span>{% endif %}
       </div>
       <h3 class="feed-item-title">
         <a href="{{ item.url }}" target="_blank" rel="noopener">{{ item.title }}</a>
