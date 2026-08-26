@@ -127,14 +127,59 @@ const ttsSupported = !!synth && typeof window.SpeechSynthesisUtterance === "func
 
 const tts = { btn: null, chunks: [], idx: 0, active: false, keepAlive: null };
 
-/** Prefer a voice matching the page language; prefer offline voices. */
-function pickVoice() {
-  const voices = synth.getVoices();
-  if (!voices.length) return null;                       // not loaded yet — use engine default
+const VOICE_KEY = "newsfeed:tts-voice";
+
+// macOS ships a pile of joke voices in the same list as the real ones.
+const NOVELTY = /^(albert|bad news|bahh|bells|boing|bubbles|cellos|deranged|good news|hysterical|jester|organ|pipe organ|superstar|trinoids|whisper|wobble|zarvox)/i;
+
+/**
+ * Rank voices by likely quality. Modern neural voices (Premium/Enhanced on
+ * macOS, Google/Natural elsewhere) sound dramatically better than the legacy
+ * compact voices, but the API exposes no quality field — only the name.
+ *
+ * Note we do NOT prefer localService: in Chrome the network Google voices are
+ * usually the best available, and preferring offline ones skipped them.
+ */
+function scoreVoice(v) {
+  const n = (v.name || "").toLowerCase();
+  let s = 0;
+  if (/premium/.test(n))            s += 50;
+  if (/enhanced/.test(n))           s += 40;
+  if (/neural|natural/.test(n))     s += 35;
+  if (/siri/.test(n))               s += 30;
+  if (/google/.test(n))             s += 25;
+  if (/compact/.test(n))            s -= 20;
+  if (NOVELTY.test(n))              s -= 100;
+  if (v.default)                    s += 5;
+  return s;
+}
+
+function langOf(v) { return (v.lang || "").slice(0, 2).toLowerCase(); }
+
+/** Usable voices, best first: page language first, novelty voices dropped. */
+function voiceList() {
   const want = (document.documentElement.lang || "en").slice(0, 2).toLowerCase();
-  const byLang = voices.filter(v => (v.lang || "").slice(0, 2).toLowerCase() === want);
-  const pool = byLang.length ? byLang : voices;
-  return pool.find(v => v.localService) || pool[0];
+  const all = synth.getVoices().filter(v => !NOVELTY.test(v.name || ""));
+  const mine = all.filter(v => langOf(v) === want);
+  const pool = mine.length ? mine : all;
+  return pool.slice().sort((a, b) =>
+    scoreVoice(b) - scoreVoice(a) || (a.name || "").localeCompare(b.name || ""));
+}
+
+function storedVoiceURI() {
+  try { return localStorage.getItem(VOICE_KEY); } catch (_) { return null; }
+}
+
+/** The user's saved choice if it's still available, else the best-ranked one. */
+function pickVoice() {
+  const list = voiceList();
+  if (!list.length) return null;                         // not loaded yet — engine default
+  const saved = storedVoiceURI();
+  if (saved) {
+    const match = synth.getVoices().find(v => v.voiceURI === saved);
+    if (match) return match;
+  }
+  return list[0];
 }
 
 /**
@@ -273,3 +318,82 @@ if (ttsSupported && typeof synth.onvoiceschanged !== "undefined") {
 // Speech outlives navigation in some browsers — make sure it doesn't.
 window.addEventListener("beforeunload", () => { if (tts.active) ttsStop(); });
 window.addEventListener("pagehide",     () => { if (tts.active) ttsStop(); });
+
+// ── Voice picker ───────────────────────────────────────────────────────────
+// Injected from JS rather than the Jinja templates so it appears on every page
+// carrying a .btn-tts, and lands without waiting for a site rebuild.
+
+function buildVoicePicker(btn) {
+  if (!ttsSupported) return null;
+  let sel = document.getElementById("tts-voice");
+  if (!sel) {
+    sel = document.createElement("select");
+    sel.id = "tts-voice";
+    sel.className = "tts-voice";
+    sel.title = "Choose the voice used for Read aloud";
+    sel.setAttribute("aria-label", "Reading voice");
+    btn.insertAdjacentElement("afterend", sel);
+
+    sel.addEventListener("change", () => {
+      try { localStorage.setItem(VOICE_KEY, sel.value); } catch (_) {}
+      // Restart so the new voice is heard straight away, not next time.
+      if (tts.active && tts.btn) {
+        const b = tts.btn, target = document.getElementById(b.dataset.target || "");
+        ttsStop();
+        if (target?.innerText.trim()) ttsStart(b, target.innerText.trim());
+      } else {
+        const v = synth.getVoices().find(x => x.voiceURI === sel.value);
+        if (v) previewVoice(v);
+      }
+    });
+  }
+  return sel;
+}
+
+/** Short spoken sample so picking a voice gives immediate feedback. */
+function previewVoice(voice) {
+  try {
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance("Here's how the news will sound.");
+    u.voice = voice;
+    u.lang = voice.lang;
+    synth.speak(u);
+  } catch (_) {}
+}
+
+function populateVoicePicker(sel) {
+  if (!sel) return;
+  const list = voiceList();
+  if (!list.length) return;                       // voices not in yet; voiceschanged will call us back
+
+  const current = pickVoice();
+  sel.innerHTML = "";
+  for (const v of list) {
+    const opt = document.createElement("option");
+    opt.value = v.voiceURI;
+    opt.textContent = `${v.name} (${v.lang})`;
+    if (current && v.voiceURI === current.voiceURI) opt.selected = true;
+    sel.appendChild(opt);
+  }
+
+  // Surface the good ones being absent — otherwise the list looks simply bad.
+  const best = scoreVoice(list[0]);
+  if (best <= 0 && !sel.dataset.warned) {
+    sel.dataset.warned = "1";
+    const hint = document.createElement("span");
+    hint.className = "tts-hint";
+    hint.textContent = "Only basic voices installed";
+    hint.title = "macOS: System Settings › Accessibility › Spoken Content › " +
+                 "System Voice › Manage Voices — download an Enhanced or " +
+                 "Premium voice, then reload this page.";
+    sel.insertAdjacentElement("afterend", hint);
+  }
+}
+
+const ttsBtnForPicker = document.querySelector(".btn-tts");
+if (ttsBtnForPicker && ttsSupported) {
+  const sel = buildVoicePicker(ttsBtnForPicker);
+  populateVoicePicker(sel);
+  // Voices arrive asynchronously, and in Chrome often only after this event.
+  synth.addEventListener("voiceschanged", () => populateVoicePicker(sel));
+}
