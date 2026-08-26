@@ -55,7 +55,9 @@ def run() -> int:
     db.init_db()
     retention = config["settings"]["retention_days"]
 
-    items = db.get_unclassified(limit=80)
+    items = db.get_unclassified(
+        limit=config["settings"].get("max_classified_per_run", 200)
+    )
     if not items:
         print("[classify] Nothing to classify")
         return 0

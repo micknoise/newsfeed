@@ -63,6 +63,11 @@ settings:
   # so this needs headroom to drain a backlog rather than dumping the
   # remainder into the Uncategorised pile. ~1.25 min/item on the local LLM.
   max_summaries_per_run: 200
+  # Same shape as the summary cap. get_unclassified orders newest-first, so
+  # a cap below intake starves an older backlog rather than just delaying it
+  # (71 items from 25 Aug sat unclassified through four runs at limit=80).
+  # Keep this comfortably above per-run intake (~54-88 items).
+  max_classified_per_run: 200
   max_article_chars: 6000
   site_title: "Newsfeed"
   tts_voice: "af_sky"
