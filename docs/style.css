@@ -388,7 +388,34 @@ a { color: inherit; text-decoration: none; }
   overflow: hidden;
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(1.6em * (var(--lines) - 1)), transparent);
           mask-image: linear-gradient(to bottom, #000 calc(1.6em * (var(--lines) - 1)), transparent);
+  transition: max-height .18s ease;
 }
+
+/* Clamped summaries expand in place, so nothing is permanently hidden. */
+.card-summary[data-clamped] { cursor: pointer; }
+.card-summary[data-clamped]:hover { color: var(--ink); }
+
+.card-summary.is-expanded {
+  max-height: 60em;
+  -webkit-mask-image: none;
+          mask-image: none;
+}
+
+/* The control is a sibling, not ::after — inside the clamped box it would be
+   clipped by the same overflow:hidden that does the clamping. */
+.summary-toggle {
+  align-self: flex-start;
+  margin-top: -.1rem;
+  padding: 0;
+  background: none;
+  border: 0;
+  font-family: var(--font-mono);
+  font-size: .64rem;
+  letter-spacing: .04em;
+  color: var(--ink-mute);
+  cursor: pointer;
+}
+.summary-toggle:hover { color: var(--signal); }
 
 .card-tags {
   display: flex;

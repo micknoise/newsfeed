@@ -397,3 +397,27 @@ if (ttsBtnForPicker && ttsSupported) {
   // Voices arrive asynchronously, and in Chrome often only after this event.
   synth.addEventListener("voiceschanged", () => populateVoicePicker(sel));
 }
+
+// ── Expandable summaries ───────────────────────────────────────────────────
+// Summaries are clamped to keep grid rows even, but nothing should be
+// permanently hidden — clamped ones get a control to expand in place.
+
+document.querySelectorAll(".card-summary").forEach(el => {
+  // Only wire up the ones actually being cut off.
+  if (el.scrollHeight <= el.clientHeight + 2) return;
+
+  el.dataset.clamped = "1";
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "summary-toggle";
+  btn.textContent = "Show more";
+  btn.setAttribute("aria-expanded", "false");
+  el.insertAdjacentElement("afterend", btn);
+
+  btn.addEventListener("click", () => {
+    const open = el.classList.toggle("is-expanded");
+    btn.textContent = open ? "Show less" : "Show more";
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+});
