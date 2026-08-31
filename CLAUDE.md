@@ -82,4 +82,19 @@ crontab -e
 
 ## LLM
 
-Local Devstral 2 via LM Studio at `http://localhost:1234/v1`. All calls go through `src/llm.py`. Model name comes from `config.yaml` → `llm.model` but can be overridden via `LLM_MODEL` env var.
+Two local models, both served OpenAI-compatible, both on-machine only:
+
+- **Per-item work** (fetch summaries, groundedness verification, theme
+  classification) uses the Mac's built-in Apple Intelligence on-device model,
+  served at `http://127.0.0.1:11435/v1` by [apfel](https://github.com/arthur-ficial/apfel)
+  (`apfel --serve`, kept running via the `com.mick.apfel-serve` LaunchAgent).
+  Its context window is only 4096 tokens, which per-item prompts comfortably
+  fit inside.
+- **The digest** (which concatenates up to 60 items into one prompt) is
+  routed instead to `qwen3.8` via Ollama at `http://127.0.0.1:11434/v1`
+  (262k context) — set under `config.yaml` → `llm.digest`.
+
+All calls go through `src/llm.py`. The default model/base_url come from
+`config.yaml` → `llm.model` / `llm.base_url`, overridable via `LLM_MODEL` /
+`LLM_BASE_URL` env vars; callers that need a different model (currently just
+the digest step) pass `model=`/`base_url=` explicitly to `llm.complete()`.

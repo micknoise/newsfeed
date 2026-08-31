@@ -1,17 +1,26 @@
 llm:
-  base_url: "http://localhost:1234/v1"
-  # Devstral is a coding model — it is not tuned for prose summarisation.
-  # Recommended swap once downloaded in LM Studio (MLX build, ~20 GB on disk):
-  #   model: "qwen/qwen3.6-35b-a3b"
-  model: "mistralai/devstral-small-2-2512"
+  # apfel (https://github.com/arthur-ficial/apfel) serves the Mac's built-in
+  # Apple Intelligence on-device model as an OpenAI-compatible endpoint. Runs
+  # as a LaunchAgent (~/Library/LaunchAgents/com.mick.apfel-serve.plist) so it
+  # survives reboot, same as Ollama/LM Studio.
+  base_url: "http://127.0.0.1:11435/v1"
+  model: "apple-foundationmodel"
   temperature: 0.3
   max_tokens_summary: 300
-  max_tokens_digest: 800
   max_tokens_classify: 60
   # Re-check every generated summary against the article text and throw it
   # away if it asserts anything the source doesn't support. Doubles the number
   # of LLM calls but stops invented news reaching the site.
   verify_summaries: true
+  # apple-foundationmodel's context window is only 4096 tokens — too small
+  # for the digest prompt, which concatenates up to 60 items' summaries.
+  # Per-item summarise/classify/verify stay on the small on-device model;
+  # the digest alone is routed to qwen3.8 (27B, 262k context) via Ollama,
+  # which is already running locally as its own persistent service.
+  digest:
+    base_url: "http://127.0.0.1:11434/v1"
+    model: "qwen3.8"
+    max_tokens: 800
 
 feeds:
   - label: "BBC News"

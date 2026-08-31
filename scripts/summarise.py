@@ -32,7 +32,7 @@ def _load_config() -> dict:
         return yaml.safe_load(f)
 
 
-def generate_digest(items: list, max_tokens: int) -> str:
+def generate_digest(items: list, max_tokens: int, digest_cfg: dict | None = None) -> str:
     if not items:
         return "No recent news available."
 
@@ -41,7 +41,17 @@ def generate_digest(items: list, max_tokens: int) -> str:
         lines.append(f"- [{row['feed_label']}] {row['title']}: {(row['summary'] or '')[:150]}")
 
     prompt = "Recent news items:\n\n" + "\n".join(lines)
-    return llm.complete(prompt, system=_SYSTEM, max_tokens=max_tokens)
+    digest_cfg = digest_cfg or {}
+    return llm.complete(
+        prompt,
+        system=_SYSTEM,
+        max_tokens=max_tokens,
+        base_url=digest_cfg.get("base_url"),
+        model=digest_cfg.get("model"),
+        # qwen3.8 is a hybrid-reasoning model; we want prose, not its
+        # hidden reasoning trace eating the token budget.
+        think=False,
+    )
 
 
 def generate_audio(text: str, voice: str = "af_sky", speed: float = 1.0) -> bool:
@@ -87,7 +97,8 @@ def run() -> str:
     db.init_db()
 
     retention = config["settings"]["retention_days"]
-    max_tokens = config["llm"].get("max_tokens_digest", 800)
+    digest_cfg = config["llm"].get("digest", {})
+    max_tokens = digest_cfg.get("max_tokens", 800)
     voice = config["settings"].get("tts_voice", "af_sky")
     speed = config["settings"].get("audio_speed", 1.0)
 
@@ -99,7 +110,7 @@ def run() -> str:
     items = db.get_items_since(since, days=retention)
     print(f"[summarise] Building digest from {len(items)} new items (since {since.strftime('%Y-%m-%d %H:%M UTC')})...")
 
-    digest = generate_digest(items, max_tokens)
+    digest = generate_digest(items, max_tokens, digest_cfg)
     db.save_digest(digest, len(items))
     print("[summarise] Digest saved")
 
