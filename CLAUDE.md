@@ -76,8 +76,11 @@ that every setting stays commented.
 
 ```bash
 crontab -e
-# Add (four times a day — Reddit throttling makes a full run take ~8 min):
-0 0,6,12,18 * * * /Users/cci-research/workspace/newsfeed/update.sh
+# Three briefings a day, each timed ~30min ahead of its target so the
+# run (Reddit throttling makes a full run take ~8 min) finishes with margin:
+30 6 * * * /Users/cci-research/workspace/newsfeed/update.sh   # breakfast briefing, ready by 7:00
+0 15 * * * /Users/cci-research/workspace/newsfeed/update.sh   # afternoon briefing, ready by 15:30
+0 21 * * * /Users/cci-research/workspace/newsfeed/update.sh   # evening briefing, ready by 21:30
 ```
 
 ## LLM
