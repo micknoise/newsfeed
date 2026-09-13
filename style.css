@@ -1,0 +1,576 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Newsfeed — a machine-written briefing, rebuilt four times a day.
+   The page's job is triage: what happened, is it worth clicking.
+
+   Two rules govern everything below:
+     1. Colour means one thing only — "arrived in the latest update".
+        Everything else is greyscale, so the eye lands on what's new.
+     2. Metadata is monospace, prose is serif. The chrome reads as machine
+        output because it is; the reading matter reads like reading matter.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Type */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               Helvetica, Arial, sans-serif;
+  /* Kept as aliases so every existing rule resolves to the one family. */
+  --font-serif: var(--font-sans);
+  --font-mono:  var(--font-sans);
+
+  /* Surface — cool neutral, not cream */
+  --paper:    #fbfbfc;
+  --raised:   #ffffff;
+  --ink:      #16171a;
+  --ink-soft: #3f424a;
+  --ink-mute: #797d87;
+  --rule:     #e3e4e9;
+  --rule-soft:#eeeff2;
+  --ink-read: #23252b;
+
+  /* The single signal: new since the last update */
+  --signal:      #1b27c4;
+  --signal-soft: #e8e9fb;
+
+  /* Rhythm */
+  --page:   1180px;
+  --gap:    2.25rem;
+  --radius: 3px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper:    #121316;
+    --raised:   #17181c;
+    --ink:      #e9e9ec;
+    --ink-soft: #b6b9c1;
+    --ink-mute: #7d818b;
+    --rule:     #2a2c32;
+    --rule-soft:#212329;
+  --ink-read: #d4d7dd;
+    --signal:      #97a2ff;
+    --signal-soft: #1e2145;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  line-height: 1.6;
+  background: var(--paper);
+  color: var(--ink);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Long URLs in extractive summaries are unbreakable tokens up to ~115 chars.
+   Without this they escape their column and push the page sideways. */
+p, li, h1, h2, h3, h4, blockquote, td, .card, .feed-item {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+a { color: inherit; text-decoration: none; }
+
+:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.site-header {
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.header-inner {
+  max-width: var(--page);
+  margin: 0 auto;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: baseline;
+  gap: 1.5rem;
+}
+
+.site-title {
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+
+.site-nav {
+  display: flex;
+  gap: 1rem;
+  font-family: var(--font-mono);
+  font-size: .82rem;
+}
+
+.site-nav a {
+  color: var(--ink-mute);
+  padding-bottom: .15rem;
+  border-bottom: 1px solid transparent;
+  transition: color .12s;
+}
+.site-nav a:hover      { color: var(--ink); }
+.site-nav a.active     { color: var(--ink); border-bottom-color: var(--ink); }
+
+.header-meta {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-family: var(--font-mono);
+  font-size: .7rem;
+  color: var(--ink-mute);
+}
+
+.download-link {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  color: var(--ink-mute);
+}
+.download-link:hover { color: var(--ink); }
+
+/* ── Shell ────────────────────────────────────────────────────────────────── */
+.site-main {
+  flex: 1;
+  width: 100%;
+  max-width: var(--page);
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 4rem;
+}
+
+.site-footer {
+  border-top: 1px solid var(--rule);
+  padding: 1.5rem;
+  font-family: var(--font-mono);
+  font-size: .7rem;
+  color: var(--ink-mute);
+  text-align: center;
+}
+
+.muted       { color: var(--ink-mute); }
+.empty-state { font-size: .95rem; padding: 3rem 0; text-align: center; }
+
+/* ── Prose ────────────────────────────────────────────────────────────────── */
+.prose    { font-size: 1.15rem; line-height: 1.7; }
+.prose-sm { font-size: .9375rem; line-height: 1.5; color: var(--ink-read); }
+
+.prose p, .prose-sm p { margin-bottom: .7em; }
+.prose p:last-child, .prose-sm p:last-child { margin-bottom: 0; }
+
+.prose h1, .prose h2, .prose h3 {
+  font-weight: 600;
+  margin: 1.2em 0 .35em;
+  line-height: 1.25;
+}
+.prose h1 { font-size: 1.4rem; }
+.prose h2 { font-size: 1.15rem; }
+.prose h3 { font-size: 1rem; }
+
+.prose ul, .prose ol, .prose-sm ul, .prose-sm ol {
+  padding-left: 1.2em;
+  margin-bottom: .7em;
+}
+.prose li, .prose-sm li { margin-bottom: .2em; }
+
+.prose strong, .prose-sm strong { font-weight: 600; color: var(--ink); }
+.prose em,     .prose-sm em     { font-style: italic; }
+
+.prose a, .prose-sm a {
+  color: inherit;
+  border-bottom: 1px solid var(--rule);
+}
+.prose a:hover, .prose-sm a:hover {
+  color: var(--signal);
+  border-bottom-color: var(--signal);
+}
+
+.prose code, .prose-sm code {
+  font-family: var(--font-mono);
+  font-size: .85em;
+  background: var(--rule-soft);
+  padding: .1em .3em;
+  border-radius: 2px;
+}
+
+/* ── Digest — the page's thesis ───────────────────────────────────────────── */
+.digest-section {
+  border-top: 2px solid var(--ink);
+  padding-top: 1.25rem;
+  margin-bottom: 3.5rem;
+}
+
+.digest-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.digest-title {
+  font-family: var(--font-mono);
+  font-size: .78rem;
+  font-weight: 500;
+  color: var(--ink-mute);
+}
+
+.digest-controls {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.digest-body {
+  max-width: 68ch;          /* a real reading measure */
+}
+
+.digest-time {
+  font-family: var(--font-mono);
+  font-size: .7rem;
+  margin-top: 1rem;
+  color: var(--ink-mute);
+}
+
+/* ── Section headings ─────────────────────────────────────────────────────── */
+.section-heading {
+  font-family: var(--font-mono);
+  font-size: .78rem;
+  font-weight: 500;
+  color: var(--ink-mute);
+  margin-bottom: 1rem;
+}
+
+/* ── Theme navigation ─────────────────────────────────────────────────────── */
+.theme-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  margin-bottom: 2.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.theme-pill {
+  font-family: var(--font-mono);
+  font-size: .8rem;
+  color: var(--ink-soft);
+  padding: .25rem .55rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  transition: border-color .12s, color .12s;
+}
+.theme-pill:hover        { color: var(--ink); border-color: var(--ink-mute); }
+.theme-pill--muted       { color: var(--ink-mute); border-style: dashed; }
+.theme-pill--small       { font-size: .74rem; padding: .1rem .4rem; }
+
+/* ── Theme groups ─────────────────────────────────────────────────────────── */
+.theme-group { margin-bottom: 2.25rem; }
+
+.theme-heading {
+  display: flex;
+  align-items: baseline;
+  gap: .6rem;
+  margin-bottom: 1.25rem;
+}
+
+.theme-badge {
+  font-family: var(--font-serif);
+  font-size: 1.4rem;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: var(--ink);
+}
+.theme-badge--muted { color: var(--ink-mute); font-style: italic; }
+
+.theme-count {
+  font-family: var(--font-mono);
+  font-size: .7rem;
+  color: var(--ink-mute);
+}
+
+/* ── Cards — rules, not boxes ─────────────────────────────────────────────── */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 1.4rem var(--gap);
+}
+
+.card {
+  min-width: 0;              /* lets grid children shrink instead of overflowing */
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+  padding-top: .7rem;
+  border-top: 1px solid var(--rule);
+}
+
+/* The signature: the rule itself carries the signal. */
+.card--new,
+.feed-item--new {
+  border-top-color: var(--signal);
+  border-top-width: 2px;
+  padding-top: calc(.85rem - 1px);
+}
+
+.card-meta,
+.feed-item-meta {
+  display: flex;
+  align-items: baseline;
+  gap: .5rem;
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: .8125rem;
+  color: var(--ink-mute);
+}
+
+.card-source {
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.card-date { font-variant-numeric: tabular-nums; }
+
+.badge-new {
+  font-family: var(--font-mono);
+  font-size: .62rem;
+  font-weight: 500;
+  color: var(--signal);
+  background: var(--signal-soft);
+  padding: .05rem .3rem;
+  border-radius: 2px;
+}
+
+.card-title,
+.feed-item-title {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -.005em;
+}
+.card-title a,
+.feed-item-title a {
+  border-bottom: 1px solid transparent;
+  transition: border-color .12s;
+}
+.card-title a:hover,
+.feed-item-title a:hover { border-bottom-color: var(--ink); }
+
+.card-summary,
+.feed-item-summary { max-width: 66ch; }
+
+/* Summaries range from one line to twenty. In a grid, the tallest card sets
+   the row height, so unclamped summaries leave large voids beside short ones.
+   Clamp to an even depth and fade the cut so it reads as deliberate. The
+   chronological feed is single-column, so it keeps its full summaries. */
+.card-summary {
+  --lines: 3;
+  max-height: calc(1.5em * var(--lines));
+  overflow: hidden;
+  transition: max-height .18s ease;
+}
+
+/* Clamped summaries expand in place, so nothing is permanently hidden. */
+.card-summary[data-clamped] { cursor: pointer; }
+.card-summary[data-clamped]:hover { color: var(--ink); }
+
+.card-summary.is-expanded { max-height: 200em; }
+
+/* The control is a sibling, not ::after — inside the clamped box it would be
+   clipped by the same overflow:hidden that does the clamping. */
+.summary-toggle {
+  align-self: flex-start;
+  margin-top: -.1rem;
+  padding: 0;
+  background: none;
+  border: 0;
+  font-family: var(--font-mono);
+  font-size: .74rem;
+  color: var(--ink-mute);
+  cursor: pointer;
+}
+.summary-toggle:hover { color: var(--signal); }
+
+.card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .3rem;
+  margin-top: .15rem;
+}
+
+.tag {
+  font-family: var(--font-mono);
+  font-size: .72rem;
+  color: var(--ink-mute);
+}
+
+/* ── Feed (chronological) ─────────────────────────────────────────────────── */
+.feed-header {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.feed-count {
+  font-family: var(--font-mono);
+  font-size: .7rem;
+  margin-left: auto;
+}
+
+.feed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  max-width: 74ch;
+}
+
+.feed-item {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+  padding-top: .7rem;
+  border-top: 1px solid var(--rule);
+}
+.feed-item--pending { opacity: .58; }
+
+/* ── Buttons ──────────────────────────────────────────────────────────────── */
+.btn-icon {
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  width: 28px; height: 28px;
+  display: inline-flex;
+  align-items: center; justify-content: center;
+  cursor: pointer;
+  color: var(--ink-soft);
+  transition: background .12s, color .12s;
+  flex-shrink: 0;
+}
+.btn-icon:hover   { background: var(--rule-soft); color: var(--ink); }
+.btn-icon.playing { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+.audio-player { display: flex; align-items: center; gap: .4rem; }
+.audio-label  { font-family: var(--font-mono); font-size: .7rem; color: var(--ink-mute); }
+
+/* Read aloud (browser TTS) */
+.btn-tts {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .3rem .7rem;
+  font-family: var(--font-mono);
+  font-size: .72rem;
+  line-height: 1;
+  color: var(--ink-soft);
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+  flex-shrink: 0;
+}
+.btn-tts svg { flex-shrink: 0; }
+.btn-tts:hover:not(:disabled) { color: var(--ink); border-color: var(--ink-mute); }
+
+.btn-tts.speaking {
+  background: var(--signal);
+  color: #fff;
+  border-color: var(--signal);
+}
+
+}
+
+.btn-tts:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Voice picker */
+.tts-voice {
+  font-family: var(--font-mono);
+  font-size: .7rem;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: .28rem .5rem;
+  max-width: 14rem;
+  cursor: pointer;
+}
+.tts-voice:hover { color: var(--ink); border-color: var(--ink-mute); }
+
+.tts-hint {
+  font-family: var(--font-mono);
+  font-size: .68rem;
+  color: var(--ink-mute);
+  cursor: help;
+  border-bottom: 1px dotted var(--rule);
+}
+
+/* ── Toast ────────────────────────────────────────────────────────────────── */
+.tts-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 1.5rem;
+  transform: translate(-50%, .5rem);
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-mono);
+  font-size: .72rem;
+  padding: .5rem .85rem;
+  border-radius: var(--radius);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s, transform .18s;
+  z-index: 40;
+}
+.tts-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 700px) {
+  .site-main    { padding: 1.75rem 1.15rem 3rem; }
+  .header-inner { padding: .85rem 1.15rem; flex-wrap: wrap; gap: .75rem 1rem; }
+  .header-meta  { width: 100%; margin-left: 0; }
+  .card-grid    { grid-template-columns: 1fr; gap: 1.5rem; }
+  .digest-controls { margin-left: 0; width: 100%; }
+  .tts-voice    { max-width: 100%; flex: 1; }
+  .theme-nav    { margin-bottom: 2rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+
+/* ── Cut for triage speed ─────────────────────────────────────────────────────
+   A feed reader earns its keep by getting you to "click or skip" quickly.
+   These carry no decision value and cost a line of scanning each:
+     - tags: LLM keywords that restate the title
+     - NEW badge: the ultramarine rule already says this
+     - theme count: a number nobody acts on
+   Hidden rather than removed from the templates, so they are one line to
+   bring back if they turn out to be missed. */
+.card-tags,
+.badge-new,
+.theme-count { display: none; }
