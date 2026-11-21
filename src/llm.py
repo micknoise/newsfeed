@@ -1,6 +1,7 @@
 """Wrapper for local LLMs, each served as an OpenAI-compatible API."""
 
 import os
+import re
 from pathlib import Path
 
 import requests
@@ -55,6 +56,8 @@ def complete(
     base_url: str | None = None,
     model: str | None = None,
     think: bool = True,
+    reasoning_effort: str | None = None,
+    ttl: int | None = None,
 ) -> str:
     """Single-turn completion via a local LLM. Returns the response text.
 
@@ -72,6 +75,13 @@ def complete(
     if not think:
         return _complete_no_think(base_url, model, system, prompt, max_tokens, temp)
 
+    # Passed through to servers that accept them. LM Studio: `ttl` unloads
+    # the model that many seconds after its last use.
+    extra = {}
+    if reasoning_effort:
+        extra["reasoning_effort"] = reasoning_effort
+    if ttl:
+        extra["ttl"] = ttl
     client = _client(base_url)
     resp = client.chat.completions.create(
         model=model,
@@ -81,5 +91,10 @@ def complete(
             {"role": "system", "content": system},
             {"role": "user", "content": prompt},
         ],
+        extra_body=extra or None,
+        timeout=600,
     )
-    return resp.choices[0].message.content.strip()
+    text = resp.choices[0].message.content or ""
+    # Some reasoning models leak <think>...</think> into the visible answer.
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.S)
+    return text.replace("<think>", "").replace("</think>", "").strip()

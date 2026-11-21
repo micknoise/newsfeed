@@ -94,8 +94,10 @@ Two local models, both served OpenAI-compatible, both on-machine only:
   Its context window is only 4096 tokens, which per-item prompts comfortably
   fit inside.
 - **The digest** (which concatenates up to 60 items into one prompt) is
-  routed instead to `qwen3.8` via Ollama at `http://127.0.0.1:11434/v1`
-  (262k context) — set under `config.yaml` → `llm.digest`.
+  routed instead to Inkling 2 Mini via LM Studio at `http://127.0.0.1:1234/v1`,
+  the same loaded model Pi uses. Set under `config.yaml` → `llm.digest`.
+  Never point it at a second large model: two at once exhausts the Mac's
+  32GB and has caused a kernel panic.
 
 All calls go through `src/llm.py`. The default model/base_url come from
 `config.yaml` → `llm.model` / `llm.base_url`, overridable via `LLM_MODEL` /

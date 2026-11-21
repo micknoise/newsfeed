@@ -48,9 +48,10 @@ def generate_digest(items: list, max_tokens: int, digest_cfg: dict | None = None
         max_tokens=max_tokens,
         base_url=digest_cfg.get("base_url"),
         model=digest_cfg.get("model"),
-        # qwen3.8 is a hybrid-reasoning model; we want prose, not its
-        # hidden reasoning trace eating the token budget.
-        think=False,
+        # Reasoning handling for the digest model lives in config.yaml.
+        think=digest_cfg.get("think", False),
+        reasoning_effort=digest_cfg.get("reasoning_effort"),
+        ttl=digest_cfg.get("ttl"),
     )
 
 

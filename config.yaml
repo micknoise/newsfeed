@@ -12,15 +12,25 @@ llm:
   # away if it asserts anything the source doesn't support. Doubles the number
   # of LLM calls but stops invented news reaching the site.
   verify_summaries: true
-  # apple-foundationmodel's context window is only 4096 tokens — too small
+  # apple-foundationmodel's context window is only 4096 tokens: too small
   # for the digest prompt, which concatenates up to 60 items' summaries.
   # Per-item summarise/classify/verify stay on the small on-device model;
-  # the digest alone is routed to qwen3.8 (27B, 262k context) via Ollama,
-  # which is already running locally as its own persistent service.
+  # the digest alone goes to Inkling 2 Mini via LM Studio's server (port
+  # 1234), the same model Pi uses, so only one large model is ever loaded.
+  # Two large models at once (Inkling in LM Studio plus qwen3.8 in Ollama)
+  # exhausted the 32GB Mac and caused a kernel panic on 21 Nov 2026.
   digest:
-    base_url: "http://127.0.0.1:11434/v1"
-    model: "qwen3.8"
-    max_tokens: 800
+    base_url: "http://127.0.0.1:1234/v1"
+    model: "thinkingmachines/inkling-2-mini"
+    # Inkling always reasons a little (it cannot be fully switched off), so
+    # keep effort low and leave room in max_tokens for the reasoning, which
+    # LM Studio returns separately from the visible answer.
+    think: true
+    reasoning_effort: "low"
+    max_tokens: 4000
+    # Seconds LM Studio keeps the model loaded after the digest when nothing
+    # else is using it, so it does not sit in memory between runs.
+    ttl: 600
 
 feeds:
   - label: "BBC News"
