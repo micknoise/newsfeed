@@ -3,6 +3,7 @@ Generate an overall digest from recent items and produce a pre-computed
 OGG audio file using the local kokoro CLI + ffmpeg.
 """
 
+import re
 import subprocess
 import sys
 import tempfile
@@ -11,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
+import requests
 import yaml
 from datetime import datetime, timedelta, timezone
 
@@ -30,6 +32,33 @@ markdown headers or bullet points — just paragraphs."""
 def _load_config() -> dict:
     with open(ROOT / "config.yaml") as f:
         return yaml.safe_load(f)
+
+
+def _available_gb() -> float:
+    """Memory macOS can hand out now: free + inactive + speculative + purgeable."""
+    out = subprocess.run(["vm_stat"], capture_output=True, text=True).stdout
+    page = int(re.search(r"page size of (\d+)", out).group(1))
+    pages = sum(
+        int(re.search(rf"Pages {k}:\s+(\d+)", out).group(1))
+        for k in ("free", "inactive", "speculative", "purgeable")
+    )
+    return pages * page / 1024**3
+
+
+def _model_loaded(base_url: str, model: str) -> bool:
+    """True if LM Studio already has the digest model in memory."""
+    try:
+        r = requests.get(base_url.removesuffix("/v1") + "/api/v0/models", timeout=5)
+        return any(m["id"] == model and m.get("state") == "loaded" for m in r.json()["data"])
+    except Exception:
+        return False
+
+
+def _headline_digest(items: list) -> str:
+    """No-LLM fallback: the latest headlines, so the digest is never stale."""
+    heads = [f"{row['title']} ({row['feed_label']})" for row in items[:12]]
+    return ("Not enough free memory to run the digest model this time. "
+            "Latest headlines: " + "; ".join(heads) + ".")
 
 
 def generate_digest(items: list, max_tokens: int, digest_cfg: dict | None = None) -> str:
@@ -111,7 +140,18 @@ def run() -> str:
     items = db.get_items_since(since, days=retention)
     print(f"[summarise] Building digest from {len(items)} new items (since {since.strftime('%Y-%m-%d %H:%M UTC')})...")
 
-    digest = generate_digest(items, max_tokens, digest_cfg)
+    # Loading the digest model without enough headroom fails on the GPU and
+    # can hang the whole Mac (23 Nov 2026: hung for 16h, then a watchdog
+    # panic). Only load it when there is room; otherwise use headlines.
+    need = digest_cfg.get("min_free_gb", 0)
+    have = _available_gb()
+    if items and need and have < need and not _model_loaded(
+        digest_cfg.get("base_url", ""), digest_cfg.get("model", "")
+    ):
+        print(f"[summarise] Only {have:.1f}GB free, digest model needs {need}GB: using headlines")
+        digest = _headline_digest(items)
+    else:
+        digest = generate_digest(items, max_tokens, digest_cfg)
     db.save_digest(digest, len(items))
     print("[summarise] Digest saved")
 

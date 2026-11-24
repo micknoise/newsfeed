@@ -31,6 +31,12 @@ llm:
     # Seconds LM Studio keeps the model loaded after the digest when nothing
     # else is using it, so it does not sit in memory between runs.
     ttl: 600
+    # Free memory (GB) required before the digest loads the model. Inkling
+    # Q4_K_M is ~18GB with its vision projector, plus its context cache. A
+    # load without this headroom ran the GPU out of memory on 23 Nov 2026
+    # and hung the Mac until a watchdog panic. Below it, the digest falls
+    # back to a plain list of headlines instead.
+    min_free_gb: 22
 
 feeds:
   - label: "BBC News"

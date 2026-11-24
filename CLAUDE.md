@@ -97,7 +97,9 @@ Two local models, both served OpenAI-compatible, both on-machine only:
   routed instead to Inkling 2 Mini via LM Studio at `http://127.0.0.1:1234/v1`,
   the same loaded model Pi uses. Set under `config.yaml` → `llm.digest`.
   Never point it at a second large model: two at once exhausts the Mac's
-  32GB and has caused a kernel panic.
+  32GB and has caused a kernel panic. `summarise.py` also refuses to load it
+  when free memory is below `llm.digest.min_free_gb` and publishes a plain
+  headline digest instead: a load without headroom hung the Mac on 23 Nov 2026.
 
 All calls go through `src/llm.py`. The default model/base_url come from
 `config.yaml` → `llm.model` / `llm.base_url`, overridable via `LLM_MODEL` /
