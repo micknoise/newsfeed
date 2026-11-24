@@ -15,28 +15,23 @@ llm:
   # apple-foundationmodel's context window is only 4096 tokens: too small
   # for the digest prompt, which concatenates up to 60 items' summaries.
   # Per-item summarise/classify/verify stay on the small on-device model;
-  # the digest alone goes to Inkling 2 Mini via LM Studio's server (port
-  # 1234), the same model Pi uses, so only one large model is ever loaded.
-  # Two large models at once (Inkling in LM Studio plus qwen3.8 in Ollama)
-  # exhausted the 32GB Mac and caused a kernel panic on 21 Nov 2026.
+  # the digest alone goes to qwen3.8 via Ollama. Ollama checks free memory
+  # and spills layers it can't fit, so it copes when the Mac is busy.
+  # Inkling via LM Studio (Nov 2026) loaded the whole model onto the GPU
+  # regardless, ran out of memory on 23 Nov and hung the Mac until a
+  # watchdog panic. LM Studio is no longer started at login.
   digest:
-    base_url: "http://127.0.0.1:1234/v1"
-    model: "thinkingmachines/inkling-2-mini"
-    # Inkling always reasons a little (it cannot be fully switched off), so
-    # keep effort low and leave room in max_tokens for the reasoning, which
-    # LM Studio returns separately from the visible answer.
-    think: true
-    reasoning_effort: "low"
-    max_tokens: 4000
-    # Seconds LM Studio keeps the model loaded after the digest when nothing
-    # else is using it, so it does not sit in memory between runs.
-    ttl: 600
-    # Free memory (GB) required before the digest loads the model. Inkling
-    # Q4_K_M is ~18GB with its vision projector, plus its context cache. A
-    # load without this headroom ran the GPU out of memory on 23 Nov 2026
-    # and hung the Mac until a watchdog panic. Below it, the digest falls
-    # back to a plain list of headlines instead.
-    min_free_gb: 22
+    base_url: "http://127.0.0.1:11434/v1"
+    model: "qwen3.8"
+    # qwen3.8 is hybrid-reasoning; think: false sends the call through
+    # Ollama's native /api/chat, which honours it, so the whole token
+    # budget goes on the visible digest.
+    think: false
+    max_tokens: 800
+    # If LM Studio has a model loaded (e.g. Inkling for Pi), skip the digest
+    # model and publish headlines: two large models at once exhausted the
+    # 32GB Mac and caused a kernel panic on 21 Nov 2026.
+    skip_if_lmstudio_loaded: true
 
 feeds:
   - label: "BBC News"
