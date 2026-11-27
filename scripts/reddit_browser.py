@@ -11,6 +11,7 @@ data/reddit/<sub>.xml. Standard library only; no Selenium or geckodriver.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import socket
 import subprocess
@@ -149,6 +150,15 @@ def main(argv=None) -> int:
         return 0
 
     OUT.mkdir(parents=True, exist_ok=True)
+    PROFILE.mkdir(parents=True, exist_ok=True)
+    # The newsfeed's scheduled run and an on-request deal scan can overlap. Two
+    # readers can't share one Firefox profile, so the second waits for the first.
+    lock = open(PROFILE / ".reader.lock", "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print("[reddit] another read is running; waiting for it to finish", file=sys.stderr)
+        fcntl.flock(lock, fcntl.LOCK_EX)
     ff = launch(headless=True)
     failed = 0
     try:
