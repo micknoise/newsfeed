@@ -55,15 +55,15 @@ feeds:
   - label: "XKCD"
     url: "https://xkcd.com/rss.xml"
   - label: "Reddit – LocalLLaMA"
-    url: "https://www.reddit.com/r/LocalLLaMA/.rss"
+    url: "file:data/reddit/LocalLLaMA.xml"
   - label: "Reddit – ComfyUI"
-    url: "https://www.reddit.com/r/comfyui/.rss"
+    url: "file:data/reddit/comfyui.xml"
   - label: "Reddit – openclaw"
-    url: "https://www.reddit.com/r/openclaw/.rss"
+    url: "file:data/reddit/openclaw.xml"
   - label: "Reddit – All"
-    url: "https://www.reddit.com/r/all/.rss"
+    url: "file:data/reddit/all.xml"
   - label: "UK Politics"
-    url: "https://www.reddit.com/r/ukpolitics/.rss"
+    url: "file:data/reddit/ukpolitics.xml"
 
 settings:
   retention_days: 3

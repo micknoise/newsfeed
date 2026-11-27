@@ -10,6 +10,7 @@ retried with backoff rather than being silently swallowed.
 import time
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
+from pathlib import Path
 from urllib.parse import urlparse
 
 import feedparser
@@ -63,8 +64,29 @@ def _throttle(url: str) -> None:
     _last_request_at[key] = time.monotonic()
 
 
+# Local feed files, e.g. the Reddit feeds that scripts/reddit_browser.py writes
+# (Reddit ended RSS on 13 Nov 2026). Relative paths are from the repo root.
+_ROOT = Path(__file__).resolve().parent.parent
+LOCAL_MAX_AGE_HOURS = 12
+
+
+def _read_local(url: str) -> bytes:
+    path = Path(url[len("file:"):].removeprefix("//"))
+    if not path.is_absolute():
+        path = _ROOT / path
+    if not path.exists():
+        raise FeedFetchError(f"local feed missing: {path}")
+    age_h = (time.time() - path.stat().st_mtime) / 3600
+    if age_h > LOCAL_MAX_AGE_HOURS:
+        # A stale file means the browser step failed; never pass old posts off as fresh.
+        raise FeedFetchError(f"local feed is {age_h:.0f}h old (browser step failing?): {path}")
+    return path.read_bytes()
+
+
 def _get(url: str, timeout: int = 30, max_retries: int = 3) -> bytes:
     """Fetch a feed URL, honouring rate limits. Raises FeedFetchError."""
+    if url.startswith("file:"):
+        return _read_local(url)
     last_err = "unknown error"
     for attempt in range(max_retries):
         _throttle(url)

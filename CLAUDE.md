@@ -60,6 +60,7 @@ data/         SQLite DB — gitignored, stores last 3 days of items
 - **Themes are LLM-discovered** — no fixed categories. `classify.py` passes existing themes as context to encourage consistency.
 - **Audio is off by default** — `settings.audio_enabled: false` skips both the digest OGG and the per-item OGGs, and makes `build_site.py` hide every audio control. `scripts/make_audio.py` is retained but not called. Flip the flag to true to bring it all back.
 - **Feeds are rate limited per host** — `src/rss.py` serialises requests per host (`HOST_DELAYS`; Reddit is 90s) and sends a descriptive `User-Agent`. Reddit returns `x-ratelimit-remaining: 0` after a *single* unauthenticated `.rss` request, so back-to-back fetches get 429s. A failed fetch raises `FeedFetchError` and is logged loudly — it is never silently treated as "this feed has no news".
+- **Reddit is read through Firefox**: Reddit ended RSS on 13 Nov 2026. `update.sh` first runs `scripts/reddit_browser.py`, which drives a headless Firefox (own profile in `data/firefox-reddit/`, Marionette port 2829, standard library only) through each subreddit named in `config.yaml` as `file:data/reddit/<sub>.xml`, 15s apart, and writes those files. `src/rss.py` reads `file:` URLs locally and fails loudly if a file is missing or over 12h old. `--login` opens a visible window to sign in if Reddit ever demands it.
 - **Summaries must be grounded** — `scripts/fetch.py` only calls the LLM when it has at least `settings.min_source_chars` (400) of real article text; otherwise it quotes the source extractively rather than inventing. With `llm.verify_summaries: true` each generated summary is re-checked against the source and discarded if unsupported. Provenance is stored in `items.summary_source` (`verified` / `llm` / `extractive` / `none`).
 - **Fault-tolerant pipeline** — each step in `run_all.py` catches exceptions so a LLM failure doesn't break the site build.
 
@@ -77,7 +78,7 @@ that every setting stays commented.
 ```bash
 crontab -e
 # Three briefings a day, each timed ~30min ahead of its target so the
-# run (Reddit throttling makes a full run take ~8 min) finishes with margin:
+# run (the Firefox Reddit step takes a few minutes) finishes with margin:
 30 6 * * * /Users/cci-research/workspace/newsfeed/update.sh   # breakfast briefing, ready by 7:00
 0 15 * * * /Users/cci-research/workspace/newsfeed/update.sh   # afternoon briefing, ready by 15:30
 0 21 * * * /Users/cci-research/workspace/newsfeed/update.sh   # evening briefing, ready by 21:30

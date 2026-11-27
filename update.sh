@@ -22,6 +22,15 @@ fi
 echo "──────────────────────────────────────" >> "$LOGFILE"
 echo "$(date '+%Y-%m-%d %H:%M:%S') Starting update" >> "$LOGFILE"
 
+# Reddit ended RSS on 13 Nov 2026: read the subreddits in config.yaml through
+# Firefox first, writing data/reddit/<sub>.xml. Never fatal.
+SUBS=$(grep -o 'data/reddit/[A-Za-z0-9_]*' config.yaml | cut -d/ -f3 | sort -u)
+if [ -n "$SUBS" ]; then
+  # shellcheck disable=SC2086
+  "$PYTHON" scripts/reddit_browser.py $SUBS 2>&1 | tee -a "$LOGFILE" || \
+    echo "$(date '+%Y-%m-%d %H:%M:%S') reddit_browser failed, continuing" >> "$LOGFILE"
+fi
+
 # Run pipeline (generates docs/ locally)
 PYTHONUNBUFFERED=1 "$PYTHON" scripts/run_all.py 2>&1 | tee -a "$LOGFILE" || echo "$(date '+%Y-%m-%d %H:%M:%S') Pipeline exited non-zero, continuing to push existing docs/" >> "$LOGFILE"
 
